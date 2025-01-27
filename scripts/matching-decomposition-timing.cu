@@ -5,7 +5,8 @@
 #include <sstream>
 #include <cuda_runtime.h>
 
-#define THREADS_PER_BLOCK 1024
+// The problem is inherently sequential in nature. There is no benefit to parallelize
+#define THREADS_PER_BLOCK 1
 
 __global__ void graphMatchingGPU(int* matrix, int* inOutMatching, int* outInMatching, int numNodes, int numMatchings) {
     int matchIdx = blockIdx.x * blockDim.x + threadIdx.x; // Thread index
@@ -16,11 +17,12 @@ __global__ void graphMatchingGPU(int* matrix, int* inOutMatching, int* outInMatc
         for (int l = 0; l < numNodes && !matched; l++) {
             if (matrix[j * numNodes + l] == 0) continue; // Skip if there is no edge
             // Use atomicCAS to ensure thread safety for matching
-            if (atomicCAS(&inOutMatching[matchIdx * numNodes + l], -1, j) == -1) {
+            // if (atomicCAS(&inOutMatching[matchIdx * numNodes + l], -1, j) == -1) {
+                inOutMatching[matchIdx * numNodes + l] = j;
                 outInMatching[matchIdx * numNodes + j] = l;
                 matched = true;
-                atomicSub(&matrix[j * numNodes + l], 1);
-            }
+                matrix[j * numNodes + l]--;
+                // atomicSub(&matrix[j * numNodes + l], 1);
         }
     }
 }
@@ -65,28 +67,28 @@ bool readMatrixFromFile(const std::string& filename, int* matrix, int numNodes) 
     return true;
 }
 
-// // Check how many threads we are allowed to use per block
-// void checkMaxThreadsPerBlock() {
-//     int deviceCount;
-//     cudaGetDeviceCount(&deviceCount);
+// Check how many threads we are allowed to use per block
+void checkMaxThreadsPerBlock() {
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
 
-//     for (int device = 0; device < deviceCount; ++device) {
-//         cudaDeviceProp deviceProp;
-//         cudaGetDeviceProperties(&deviceProp, device);
+    for (int device = 0; device < deviceCount; ++device) {
+        cudaDeviceProp deviceProp;
+        cudaGetDeviceProperties(&deviceProp, device);
 
-//         std::cout << "Device " << device << ": " << deviceProp.name << "\n";
-//         std::cout << "  Maximum threads per block: " << deviceProp.maxThreadsPerBlock << "\n";
-//         std::cout << "  Maximum block dimensions: (" 
-//                   << deviceProp.maxThreadsDim[0] << ", " 
-//                   << deviceProp.maxThreadsDim[1] << ", " 
-//                   << deviceProp.maxThreadsDim[2] << ")\n";
-//         std::cout << "  Maximum grid dimensions: (" 
-//                   << deviceProp.maxGridSize[0] << ", " 
-//                   << deviceProp.maxGridSize[1] << ", " 
-//                   << deviceProp.maxGridSize[2] << ")\n";
-//         std::cout << std::endl;
-//     }
-// }
+        std::cout << "Device " << device << ": " << deviceProp.name << "\n";
+        std::cout << "  Maximum threads per block: " << deviceProp.maxThreadsPerBlock << "\n";
+        std::cout << "  Maximum block dimensions: (" 
+                  << deviceProp.maxThreadsDim[0] << ", " 
+                  << deviceProp.maxThreadsDim[1] << ", " 
+                  << deviceProp.maxThreadsDim[2] << ")\n";
+        std::cout << "  Maximum grid dimensions: (" 
+                  << deviceProp.maxGridSize[0] << ", " 
+                  << deviceProp.maxGridSize[1] << ", " 
+                  << deviceProp.maxGridSize[2] << ")\n";
+        std::cout << std::endl;
+    }
+}
 
 // Matching decomposition
 void runGraphMatchingGPU(int numNodes, int k, std::string filename, bool warmup, bool printMatchings) {
@@ -109,11 +111,22 @@ void runGraphMatchingGPU(int numNodes, int k, std::string filename, bool warmup,
     for (int i = 0; i < numNodes; i++) {
         for (int j = 0; j < numNodes; j++) {
             if (j == (i+1)%numNodes){
+
+                // Permutation Traffic Matrix
                 h_matrix[i * numNodes + j] = k*numNodes;
+                
+                // Uniform Traffic Matrix
+                // h_matrix[i * numNodes + j] = k;
+                
                 // std::cout << "  Node " << i << " -> Node " << j << " traffic: " << k*numNodes << "\n";
             }
             else{
+                
+                // Permutation Traffic Matrix
                 h_matrix[i * numNodes + j] = 0;
+                
+                // Uniform Traffic Matrix
+                // h_matrix[i * numNodes + j] = k;
             }
         }
     }
@@ -140,7 +153,7 @@ void runGraphMatchingGPU(int numNodes, int k, std::string filename, bool warmup,
     cudaEventCreate(&stop);
 
     // Launch kernel
-    int blocks = (numMatchings + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    int blocks = 1; //(numMatchings + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     cudaEventRecord(start);
     graphMatchingGPU<<<blocks, THREADS_PER_BLOCK>>>(d_matrix, d_inOutMatching, d_outInMatching, numNodes, numMatchings);
     cudaEventRecord(stop);
@@ -158,7 +171,7 @@ void runGraphMatchingGPU(int numNodes, int k, std::string filename, bool warmup,
     long long elapsedTimeNs = static_cast<long long>(elapsedTimeMs * 1e6);
 
     if (!warmup){
-        std::cout << "NumToRs " << numNodes <<  " TimeNS: " << elapsedTimeNs << std::endl;
+        std::cout << numNodes <<  " " << elapsedTimeNs << std::endl;
         if (printMatchings){
             std::cout << "Matchings:\n";
             for (int i = 0; i < numMatchings; i++) {
