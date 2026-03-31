@@ -1,0 +1,106 @@
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
+#include "pipe.h"
+#include <iostream>
+#include <sstream>
+#include "dyn_net_sch.h"
+#include "ndppacket.h"
+#include "mixnet_topomanager.h"
+
+Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
+: EventSource(eventlist,"pipe"), _delay(delay)
+{
+    stringstream ss;
+    ss << "pipe(" << delay/1000000 << "us)";
+    _nodename= ss.str();
+
+    _pipe_is_downlink = false; // added for util
+    _B_delivered = 0; // added for util
+}
+
+void Pipe::receivePacket(Packet& pkt)
+{
+    pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_ARRIVE);
+    if (_inflight.empty()){
+	/* no packets currently inflight; need to notify the eventlist
+	   we've an event pending */
+	eventlist().sourceIsPendingRel(*this,_delay);
+    }
+    _inflight.push_front(make_pair(eventlist().now() + _delay, &pkt));
+}
+
+
+uint64_t Pipe::reportBytes() {
+    uint64_t temp;
+    temp = _B_delivered;
+    _B_delivered = 0; // reset the counter
+    return temp;
+}
+
+void Pipe::set_dyn_sch(DynFlatScheduler * ds)
+{
+	dyn_sch = ds;
+}
+
+void Pipe::set_regional_topo_manager(RegionalTopoManager * regional_topo_manager_){
+    regional_topo_manager = regional_topo_manager_;
+}
+
+void Pipe::doNextEvent() {
+    // std::cerr <<"Pipe::doNextEvent()"<<std::endl;
+    if (_inflight.size() == 0) 
+	return;
+
+    std::cout << "[Pipe] before pop size=" << _inflight.size() << " next_delivery=" << _inflight.back().first << std::endl;
+    Packet *pkt = _inflight.back().second;
+    _inflight.pop_back();
+    std::cout << "[Pipe] after pop size=" << _inflight.size() << std::endl;
+    pkt->flow().logTraffic(*pkt, *this,TrafficLogger::PKT_DEPART);
+
+
+    // if this pipe is a ToR downlink to server
+    if (_pipe_is_downlink) {
+        // check if we need to count this packet:
+        switch (pkt->type()) {
+        case NDP:
+        {
+            //NdpPacket* ndp_pkt = dynamic_cast<NdpPacket*>(pkt);
+            if (pkt->size() > 64) // it's not a header
+                _B_delivered = _B_delivered + pkt->size(); // increment packet delivered
+            break;
+        }
+        case TCP:
+        {
+            _B_delivered = _B_delivered + pkt->size(); // increment packet delivered
+        }
+        case TCPACK:
+        case TCPNACK:
+        case NDPACK:
+        case NDPNACK:
+        case NDPPULL:
+        case ETH_PAUSE:
+            break;
+        }
+    }
+
+    // tell the packet to move itself on to the next hop
+    pkt->sendOn();
+
+	if (dyn_sch && dyn_sch->status == DynFlatScheduler::DynNetworkStatus::DYN_NET_RECONF) {
+		// std::cerr << this << std::endl;
+	 	// pkt->_nexthop = pkt->_route->size() - 1;
+	    // pkt->sendOn();
+		dyn_sch->do_reconf();
+	}
+	else if (regional_topo_manager && regional_topo_manager->status == RegionalTopoManager::TopoStatus::TOPO_RECONF) {
+		regional_topo_manager->do_reconf();
+	}
+    else {
+    }
+    
+
+    if (!_inflight.empty()) {
+	// notify the eventlist we've another event pending
+	simtime_picosec nexteventtime = _inflight.back().first;
+	_eventlist.sourceIsPending(*this, nexteventtime);
+    }
+}

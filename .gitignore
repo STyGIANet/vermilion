@@ -1,0 +1,9 @@
+# Ignore large model files
+mixnet_flatbuf/
+
+# Or specific files
+*.fbuf
+*.json
+
+# Ignore object files
+*.o
