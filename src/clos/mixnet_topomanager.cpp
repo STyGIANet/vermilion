@@ -235,7 +235,7 @@ void RegionalTopoManager::doNextEvent()
   {
     non_empty_queues = 0;
     set_regional_queues_pause_recved(); // recompute drain state without injecting new traffic
-    if (non_empty_queues == 0)
+    if (non_empty_queues == 0 )
   { 
      _do_reconf();
     status = TopoStatus::TOPO_RECONF;
@@ -262,19 +262,20 @@ void RegionalTopoManager::start_reconf()
   non_empty_queues = 0;
   set_regional_tcp_pause();           // to be done  //Deeksha tcp flow s paused
   set_regional_queues_pause_recved(); // done   //Deeksha: made changes in this function
-  // if (non_empty_queues == 0)
-  // {
-  //    _do_reconf();
-  //   status = TopoStatus::TOPO_RECONF;
-  // }
+  if (non_empty_queues == 0)
+  {
+     _do_reconf();
+    status = TopoStatus::TOPO_RECONF;
+  }
    
-  // else{
-  //   eventlist.sourceIsPendingRel(*this, reconf_delay/100); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
-  //   std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
-  //   status = TopoStatus::TOPO_WAIT_DRAIN;
-  // }
-  _do_reconf();
-   status = TopoStatus::TOPO_RECONF;
+  else{
+    eventlist.sourceIsPendingRel(*this, reconf_delay/100); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+    std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
+    status = TopoStatus::TOPO_WAIT_DRAIN;
+  }
+  //Deeksha: To test without waiting for drain  -> failed with an assertion error in finish_reconf because the queues are not empty and we are trying to set them to ready state  if we skip this assert another next hop assert issue raises
+  // _do_reconf();
+  //  status = TopoStatus::TOPO_RECONF;
 }
 
 void RegionalTopoManager::do_reconf()
@@ -343,7 +344,7 @@ void RegionalTopoManager::finish_reconf()
       Queue *q = topo->queues[i][j];
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
       // std::cerr << "queue " << i << ", " << j << " br " << eq->_bitrate << " ps per byte " << eq->_ps_per_byte << " size " << eq->_enqueued.size() << std::endl;
-      //assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
+     // assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
       // if (eq->_bitrate > 0)
       {
         eq->_state_send = LosslessQueue::READY;
@@ -395,14 +396,14 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
           
         // }
         // Allow existing backlog to drain; flows are paused so no new packets enter
-        eq->_state_send = LosslessQueue::READY;
+        //eq->_state_send = LosslessQueue::PAUSE_RECEIVED;
         
         non_empty_queues += eq->_enqueued.size();
-        if (!eq->_enqueued.empty() && eq->_state_send != LosslessQueue::PAUSED)
-        {
-          /* schedule the next dequeue event */
-          eq->beginService();
-        }
+        // if (!eq->_enqueued.empty() && eq->_state_send != LosslessQueue::PAUSED)
+        // {
+        //   /* schedule the next dequeue event */
+        //   eq->beginService();
+        // }
         // std::cerr << i << ", " << j << " qsz " << eq->_enqueued.size() << " bw " << eq->_bitrate << std::endl;
       }
       
@@ -463,8 +464,9 @@ void RegionalTopoManager::set_regional_tcp_pause()
     // }
     i++;
   }
-  std::cout << "Finished setting regional tcp pause for region " << region_id << " Total flows paused: " << demandrecorder->rtx_scanner->_tcps.size() << std::endl;
+  std::cout << "For region " << region_id << " Total flows paused: " << demandrecorder->rtx_scanner->_tcps.size() << std::endl;
 }
+
 
 void RegionalTopoManager::update_regional_route()
 {
@@ -680,6 +682,23 @@ void RegionalTopoManager::prepare_conn_cycle()
   conn_cycle_ready = !conn_cycle.empty();
   conn_cycle_idx = 0;
 }
+
+//Deeksha: Adding the function here to find if there is any active all-to-all flow in the region, to decide whether we can skip the reconfiguration or not
+bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id) {  
+    list<TcpSrc *>::iterator i = region_manager->demandrecorder->rtx_scanner->_tcps.begin();  
+    while (i != region_manager->demandrecorder->rtx_scanner->_tcps.end()) {  
+        TcpSrc* tcpsrc = *i;  
+          
+        // Check if it's an all-to-all flow and in the specified region  
+        if (tcpsrc->is_all2all && region_manager->is_in_region(tcpsrc)) {  
+            return true; // Found active all-to-all in this region  
+        }  
+        i++;  
+    }  
+    return false; // No active all-to-all found in this region  
+}
+
+
 
 void RegionalTopoManager::rotor_conn_cycle()
 { 
