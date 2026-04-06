@@ -1,30 +1,55 @@
-# MixNet-htsim simulator
+## Build and run
 
-This module contains the MixNet-htsim packet-level network simulator. It models the cluster that runs MoE training job with different interconnects. The source code was extended from the TopoOpt simulator from NSDI 2023 and Opera simulator from NSDI 2020, please check the original README file [here](OPERA_README.md).
+Prerequisites
+- Put the `mixnet_flatbuf` file in the project root (the main folder).
 
-## Compilation:
-To build the MixNet-htsim simulator, from the top level directory run:
+Build
+- Run the build script (it performs a simple clean + build):
 ```bash
-cd src/clos
-make
-cd datacenter
-make
+./build_vermilion_sim
 ```
-We also provide convinent compile scripts [here](./mixnet_scripts/compile.sh)
 
-## Executables
+Run
+- Change into the scripts folder and run the simulation binary:
+```bash
+cd vermilion/mixnet_scripts/
+./mixtral_8x22B_mixnet
+```
+- The binary accepts flags to control:
+    - reconfiguration delay (-periodic_interval_us 20)
+    - periodic reconfiguration flag (-periodic_reconf 1 )
+    - timing workload (choose from the options in the  `mixnet_flatbuf` directory) (workloads=("num_global_tokens_per_expert"))
 
-The executables are found in the `src/clos/datacenter` folder. They have the name "htsim_...". The following table provides details on each executable:
+Outputs
+- Simulation logs are written to:
+```
+vermilion/scr/clos/datacentre/logs/<flatbuf_filename>
+```
+(Replace `<flatbuf_filename>` with the flatbuf file used at runtime.)
 
-| Executable | Network Topology |
-|------------|------------------|
-| `htsim_tcp_fattree`       | Fat-Tree network topology, single job |
-| `htsim_tcp_os_fattree`    | Oversubscribed Fat-Tree where the ToR switches are oversubscribed |
-| `htsim_tcp_mixnet`        | Runtime reconfigurable optical-electrical fabric for distributed Mixture-of-Experts training |
+## Quick introduction (topology reconfiguration flow)
 
-## Brief description on source code
+Starting point
+- The first reconfiguration is initiated from `FFTask::cleanup` when the next task in `task_buf` is an all-to-all.
 
-MixNet-htsim's major extension from the htsim simulator allows it to take a taskgraph (in FlatBuffer) generated from the FlexFlow DNN training simulator. To achieve this, `src/clos/ffapp.*` was implemented as an API to read and process these such taskgraphs. In addition, a few network topologies are added, notably the dynamic network executable that simulates SiP-ML. The mixnet topology logic can be found in `src/clos/datacenter/mixnet.*` and the regional reconfiguration logic for mixnet is implemented in `src/clos/mixnet_topomanager.*`.
+RegionalTopoManager::doNext()
+- This method is invoked for topology-related events. There are three relevant status states:
+    1. TOPO_LIVE
+    2. TOPO_RECONF
+    3. TOPO_WAIT_DRAIN (added to explicitly handle drain checks)
 
-Each topology's "main" function can be found in `src/clos/datacenter/main_tcp_*.cpp`, which provides detailed description on the input arguments for the executable. 
+Behavior by state
+- TOPO_LIVE
+    - Indicates an active topology is present.
+    - The event handler pauses TCP flows, queues and pipes.
+    - If there are no packets in flight or queued, it schedules a `_reconfig` event (same RegionalTopoManager type) after `reconfiguration_delay` and sets the status to `TOPO_RECONF`.
 
+- TOPO_RECONF
+    - Signifies that the reconfiguration delay has elapsed.
+    - The manager applies the new topology and updates link bandwidth/datarate according to the `conn[][]` matrix.
+
+- TOPO_WAIT_DRAIN
+    - Used to explicitly verify that all in-flight/queued packets have drained before proceeding with reconfiguration.
+
+Notes 
+- Use the log files under `vermilion/scr/clos/datacentre/logs/` to trace event timings and state transitions.
