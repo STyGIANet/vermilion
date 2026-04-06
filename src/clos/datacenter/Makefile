@@ -1,6 +1,6 @@
 CC=g++
 CXX=g++
-CFLAGS=-Wall -std=c++17 -O0 -g
+CFLAGS=-Wall -std=c++17 -O3 -g
 FF_HOME?=$(PWD)/../../../../FlexFlow
 #GUROBI_DIR?=$(HOME)/gurobi912/linux64
 #GUROBI_DIR=/usr/wkspace/3dparty/gurobi_server912/linux64
