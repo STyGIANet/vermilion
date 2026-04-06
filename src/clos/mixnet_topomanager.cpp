@@ -31,6 +31,7 @@ extern uint32_t RTT;
 extern uint32_t SPEED;
 extern ofstream fct_util_out;
 
+
 All2AllTrafficRecorder::All2AllTrafficRecorder(int layer_num, int region_num, int region_size, TcpRtxTimerScanner *rtx_scanner)
     : rtx_scanner(rtx_scanner), region_size(region_size), region_num(region_num), layer_num(layer_num)
 {
@@ -187,7 +188,7 @@ void All2AllTrafficRecorder::dump_all_traffic_matrices(int layer_id, int region_
 }
 
 RegionalTopoManager::RegionalTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, int region_id, bool periodic_reconf, simtime_picosec periodic_interval)
-    : EventSource(eventlist, "MixnetRegionalTopoManager"), topo(topo), demandrecorder(demandrecorder), reconf_delay(refonc_delay), eventlist(eventlist), region_id(region_id), periodic_reconf(periodic_reconf), periodic_interval(periodic_interval)
+  : EventSource(eventlist, "MixnetRegionalTopoManager"), topo(topo), demandrecorder(demandrecorder), reconf_delay(refonc_delay), eventlist(eventlist), region_id(region_id), periodic_reconf(periodic_reconf), periodic_interval(periodic_interval), paused_flow_count(0), first_reconf_done(false)
 {
 
   nnodes = topo->no_of_nodes();
@@ -366,11 +367,17 @@ void RegionalTopoManager::finish_reconf()
   // Deeksha: Triggering after the reconfig within the do next event itself
   
   resume_regional_tcp_flows();
-  if (periodic_reconf && periodic_interval > 0)
-    {
-      eventlist.sourceIsPending(*this, eventlist.now() + periodic_interval);
-      std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
-    }
+  // Only skip scheduling when there are no paused flows after the first reconfiguration.
+  // For the very first reconfiguration we still want to schedule the periodic reconf regardless
+  // of paused_flow_count so that the periodic policy takes effect.
+  if (periodic_reconf && periodic_interval > 0 && (paused_flow_count > 0 || !first_reconf_done))
+  {
+    eventlist.sourceIsPending(*this, eventlist.now() + periodic_interval);
+    std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
+  }
+
+  // Mark that we've completed at least one reconfiguration for this region
+  first_reconf_done = true;
 }
 //Deelksha: Set the queues and pipes in the region to PAUSE_RECEIVED state
 void RegionalTopoManager::set_regional_queues_pause_recved()
@@ -440,15 +447,28 @@ void RegionalTopoManager::set_regional_tcp_pause()
     2. if the tcp flow is in this region, set the tcp flow to pause
   */
  //std::cout << "Setting regional tcp pause for region " << region_id << std::endl;
+  paused_flow_count = 0;
   list<TcpSrc *>::iterator i = demandrecorder->rtx_scanner->_tcps.begin();
   while (i != demandrecorder->rtx_scanner->_tcps.end())
   {
     TcpSrc *tcpsrc = *i;
-    if (is_in_region(tcpsrc))
+    if (is_in_region(tcpsrc)&& (!tcpsrc->is_elec))
     {
       assert(tcpsrc->is_all2all);
-      tcpsrc->pause_flow_in_region();
+      // Only pause within this region to avoid tripping the global pause flag
+      // that would block unrelated flows.
+      //tcpsrc->pause_flow_in_region();
+      tcpsrc->pause_flow();
       std::cout << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
+      if(tcpsrc->is_all2all && tcpsrc->is_elec)
+      {
+        std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is electric." << std::endl;
+      }
+      else if(tcpsrc->is_all2all && !tcpsrc->is_elec)
+      {
+        std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is optical." << std::endl;
+      }
+      paused_flow_count++;
     }
     // if (tcpsrc->is_all2all && is_in_region(tcpsrc))
     // {
@@ -464,7 +484,7 @@ void RegionalTopoManager::set_regional_tcp_pause()
     // }
     i++;
   }
-  std::cout << "For region " << region_id << " Total flows paused: " << demandrecorder->rtx_scanner->_tcps.size() << std::endl;
+  std::cout << "For region " << region_id << " Total flows paused: " << paused_flow_count << std::endl;
 }
 
 
@@ -523,6 +543,8 @@ void RegionalTopoManager::resume_regional_tcp_flows()
   /*
     refer to DynFlatScheduler::resume_tcp_flows()
   */
+  // Clear any global pause state so region-local resumes can actually send.
+  TcpSrc::resume_all_flow();
   list<TcpSrc *>::iterator i = demandrecorder->rtx_scanner->_tcps.begin();
   while (i != demandrecorder->rtx_scanner->_tcps.end())
   {
@@ -532,6 +554,7 @@ void RegionalTopoManager::resume_regional_tcp_flows()
       assert(tcpsrc->is_all2all);
       tcpsrc->resume_flow_in_region();
       tcpsrc->resume_flow();
+      std::cout << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
     }
     i++;
   }
@@ -599,67 +622,67 @@ void RegionalTopoManager::prepare_conn_cycle()
         std::vector<int>(region_size, 0)));
 
   conn = {
-      { // conn[0]
-        {1,1,0,0,1,0,1,0},
-        {0,1,0,2,0,1,0,0},
-        {2,0,1,1,0,0,0,0},
-        {1,0,1,1,0,1,0,0},
-        {0,0,0,0,2,0,1,1},
-        {0,0,1,0,0,1,0,2},
-        {0,2,0,0,0,1,1,0},
-        {0,0,1,0,1,0,1,1}
-      },
-      { // conn[1]
-        {1,0,1,0,0,0,1,1},
-        {0,2,0,0,0,1,1,0},
-        {0,0,1,1,0,1,0,1},
-        {1,1,0,1,1,0,0,0},
-        {0,0,1,0,1,1,0,1},
-        {1,0,0,2,0,1,0,0},
-        {1,0,1,0,1,0,0,1},
-        {0,1,0,0,1,0,2,0}
-      },
-      { // conn[2]
-        {0,1,1,0,0,0,1,1},
-        {1,0,0,1,0,0,1,1},
-        {0,0,1,0,0,2,0,1},
-        {1,1,1,0,1,0,0,0},
-        {1,0,1,1,0,1,0,0},
-        {0,1,0,1,1,0,1,0},
-        {1,0,0,1,1,1,0,0},
-        {0,1,0,0,1,0,1,1}
-      },
-      { // conn[3]
-        {0,1,0,1,0,1,0,1},
-        {1,0,0,0,1,1,1,0},
-        {0,1,0,1,1,0,1,0},
-        {0,1,1,0,0,0,1,1},
-        {1,0,2,0,1,0,0,0},
-        {1,1,0,0,0,0,1,1},
-        {1,0,1,1,0,1,0,0},
-        {0,0,0,1,1,1,0,1}
-      },
-      { // conn[4]
-        {0,1,0,1,0,1,0,1},
-        {0,0,1,0,1,1,0,1},
-        {0,1,0,0,1,0,1,1},
-        {0,0,0,0,1,1,2,0},
-        {1,0,2,1,0,0,0,0},
-        {1,1,0,0,0,0,1,1},
-        {0,1,1,1,0,1,0,0},
-        {2,0,0,1,1,0,0,0}
-      },
-      { // conn[5]
-        {0,1,0,1,0,1,0,1},
-        {0,0,1,0,1,1,0,1},
-        {1,0,0,1,0,0,1,1},
-        {1,0,0,0,2,1,0,0},
-        {0,1,0,1,0,0,2,0},
-        {1,0,1,0,0,0,1,1},
-        {0,2,1,0,0,1,0,0},
-        {1,0,1,1,1,0,0,0}
-      }
-    };
+    { // conn[0]
+      {1,1,2,1,1,0,1,0},
+      {1,1,0,2,0,1,2,0},
+      {2,0,1,1,0,1,0,1},
+      {1,2,1,1,0,1,0,0},
+      {1,0,0,0,2,0,1,1},
+      {0,1,1,1,0,1,1,2},
+      {1,2,0,0,1,1,1,1},
+      {0,0,1,0,1,2,1,1}
+    },
+    { // conn[1]
+      {1,0,1,1,0,1,1,1},
+      {0,2,0,1,0,1,1,1},
+      {1,0,1,1,1,1,1,1},
+      {1,1,1,1,1,2,0,0},
+      {0,0,1,1,1,1,1,1},
+      {1,1,1,2,1,1,0,0},
+      {1,1,1,0,1,0,0,2},
+      {1,1,1,0,1,0,2,0}
+    },
+    { // conn[2]
+      {0,1,1,1,1,0,1,1},
+      {1,0,0,1,0,1,1,1},
+      {1,0,1,1,1,2,0,1},
+      {1,1,1,0,1,1,1,0},
+      {1,0,1,1,0,1,1,1},
+      {0,1,2,1,1,0,1,0},
+      {1,1,0,1,1,1,0,1},
+      {1,1,1,0,1,0,1,1}
+    },
+    { // conn[3]
+      {0,1,0,1,1,1,1,1},
+      {1,0,1,1,1,1,1,0},
+      {0,1,0,1,2,0,1,0},
+      {1,1,1,0,0,0,1,1},
+      {1,1,2,0,1,0,0,1},
+      {1,1,0,0,0,0,1,1},
+      {1,1,1,1,0,1,0,0},
+      {1,0,0,1,1,1,0,1}
+    },
+    { // conn[4]
+      {0,1,0,1,1,1,0,2},
+      {1,0,1,0,1,1,1,1},
+      {0,1,0,0,2,0,1,1},
+      {1,0,0,0,1,1,2,1},
+      {1,1,2,1,0,0,0,1},
+      {1,1,0,1,0,0,1,1},
+      {0,1,1,2,0,1,0,0},
+      {2,1,1,1,1,1,0,0}
+    },
+    { // conn[5]
+      {0,1,1,1,0,1,0,1},
+      {1,0,1,0,1,1,2,1},
+      {1,1,0,1,0,1,1,1},
+      {1,0,1,0,2,1,0,1},
+      {0,1,0,2,0,0,2,1},
+      {1,1,1,1,0,0,1,1},
+      {0,2,1,0,2,1,0,0},
+      {1,1,1,1,1,1,0,0}
+    }
+  };
 
   //std::vector<int> avail_conn(region_size, alpha);
   for (int k = 1; k < 6; k++)

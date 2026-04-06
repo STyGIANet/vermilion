@@ -98,6 +98,10 @@ public:
   EventList & eventlist;
   All2AllTrafficRecorder * demandrecorder;
   uint64_t non_empty_queues;
+  //Deeksha:  Number of paused all-to-all flows in this region after calling set_regional_tcp_pause()
+  int paused_flow_count = 0;
+  // Track whether we've completed the first reconfiguration for this region
+  bool first_reconf_done = false;
   std::vector<std::vector<int>> reconfig_conn_matrix;  // Store the conn matrix computed in start_reconf
 };
 
