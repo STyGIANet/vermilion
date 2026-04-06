@@ -7,7 +7,9 @@ mixnet_flatbuf/
 
 # Ignore object files
 *.o
-
+*.a
+*.so
+*.out
 
 src/clos/datacentre/logs/
 src/clos/datacenter/logs/
