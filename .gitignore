@@ -13,3 +13,4 @@ src/clos/datacentre/logs/
 src/clos/datacenter/logs/
 
 src/clos/datacenter/logs/
+src/clos/datacenter/htsim_tcp_*
