@@ -2238,14 +2238,14 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
         flowSrc->is_all2all = true;
         if(ffapp->topology->conn[src_node][dst_node]>0) {//ocs
             // set the iselec and isall2all
-            flowSrc->is_elec = false; //Deeksha: Setting to all electrical for now, we can further distinguish the ocs and eps flow in the future by checking the connection type
+            flowSrc->is_elec = false; //Deeksha: All electric works well getting back to ocs for debugging
             // Update OCS volume statistics (sent)
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
         }
         else {
-            flowSrc->is_elec = false;
+            flowSrc->is_elec = true;
             // Update EPS volume statistics (sent)
             node_eps_volume[src_node] += flow_size;
             // Update EPS volume statistics (received)

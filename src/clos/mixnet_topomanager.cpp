@@ -345,7 +345,7 @@ void RegionalTopoManager::finish_reconf()
       Queue *q = topo->queues[i][j];
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
       // std::cerr << "queue " << i << ", " << j << " br " << eq->_bitrate << " ps per byte " << eq->_ps_per_byte << " size " << eq->_enqueued.size() << std::endl;
-     // assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
+      assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
       // if (eq->_bitrate > 0)
       {
         eq->_state_send = LosslessQueue::READY;
@@ -356,11 +356,6 @@ void RegionalTopoManager::finish_reconf()
         //   // std::cerr << "\t starting... " << std::endl;
         // }
       }
-      
-      // else
-      // {
-      //   eq->_state_send = LosslessQueue::PAUSED;
-      // }
     }
   }
 
@@ -403,7 +398,7 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
           
         // }
         // Allow existing backlog to drain; flows are paused so no new packets enter
-        //eq->_state_send = LosslessQueue::PAUSE_RECEIVED;
+        eq->_state_send = LosslessQueue::READY;
         
         non_empty_queues += eq->_enqueued.size();
         // if (!eq->_enqueued.empty() && eq->_state_send != LosslessQueue::PAUSED)
@@ -515,7 +510,7 @@ void RegionalTopoManager::update_regional_route()
       else
       {
         // this flow is re-assigned to elec fabric
-        tcpsrc->is_elec = false; // Deeksha: For testing, keeping all flows in optical fabric, to do change this to true
+        tcpsrc->is_elec = true; // Deeksha: For testing, keeping all flows in optical fabric, to do change this to true
       }
       assert(tcpsrc->is_all2all);
       Route *routeout, *routein;
@@ -682,7 +677,8 @@ void RegionalTopoManager::prepare_conn_cycle()
       {1,1,1,1,1,1,1,1},
        {1,1,1,1,1,1,1,1},
       {1,1,1,1,1,1,1,1}
-     } };
+     } 
+    };
 
   // conn = {
   //   { // conn[0]

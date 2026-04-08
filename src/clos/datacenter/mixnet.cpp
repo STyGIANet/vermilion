@@ -188,7 +188,8 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
   // convert the gpu id into node id
   int src = src_gpu_idx / NUM_GPU_PER_NODE;
   int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
-  assert(src/region_size == dest/region_size);
+  assert(src/region_size == dest/region_size);      //Check if they belong to same region or not
+  
   
   route_t *routeout, *routeback;
   if(conn[src][dest]>0) { //allocate ocs path
@@ -197,7 +198,7 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
     route_t *routeout, *routeback;
 
     // NOTE: HARD CODED `0` BECAUSE THERE'S ONLY ONE SWITCH
-    cerr << "id: " << src * _no_of_nodes + dest << endl;
+    //cerr << "id: " << src * _no_of_nodes + dest << endl;
     assert(_routes.find(src * _no_of_nodes + dest) != _routes.end());
 
     for (const vector<size_t> *r : _routes[src * _no_of_nodes + dest])
