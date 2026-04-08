@@ -1009,6 +1009,8 @@ void FFTask::execute_compute() {
                         // trigger reconfiguration
                         ffapp->topomanager->regional_topo_managers[region_id]->current_layer_id = layer_id;
                         ffapp->topomanager->regional_topo_managers[region_id]->current_micro_batch_id = micro_batch_id;
+                        // reset so periodic reconf starts fresh for the new layer
+                        ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
                         assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));// it must be true
                         eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
                        // cout << "backward aggregated task trigger reconfig at "<< eventlist().now() << std::endl;
@@ -1081,6 +1083,8 @@ void FFTask::cleanup() {
                     //Deeksha: Add our reconfigutation and events here
                     ffapp->topomanager->regional_topo_managers[region_id]->current_layer_id = layer_id;
                     ffapp->topomanager->regional_topo_managers[region_id]->current_micro_batch_id = micro_batch_id;
+                    // reset per-layer periodic reconf state
+                    ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
                     ffapp->topomanager->demandrecorder->dump_all_traffic_matrices(layer_id, region_id, all2all_task->all2all_traffic_matrix);        //Deeksha: For debugging purpose
                     ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
                     //Performing append (as above ) with normalized and scaled traffic matrix inside update traffic matrix function 

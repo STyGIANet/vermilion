@@ -20,7 +20,7 @@ ifeq ($(USE_GUROBI), 1)
 	CFLAGS+= -L$(GUROBI_DIR)/lib  -DHAVE_GUROBI #-O0 -g  #-L$(FF_HOME)/protobuf/src/.libs -lprotobuf 
 endif
 #-Lksp
-OBJS=../eventlist.o ../tcppacket.o ../pipe.o ../queue.o ../queue_lossless.o ../queue_lossless_input.o ../queue_lossless_output.o ../ecnqueue.o ../tcp.o ../dctcp.o ../mtcp.o ../loggers.o ../logfile.o ../clock.o ../config.o ../network.o ../qcn.o ../exoqueue.o ../randomqueue.o ../cbr.o ../cbrpacket.o ../sent_packets.o ../ndp.o ../ndppacket.o ../eth_pause_packet.o ../compositequeue.o ../prioqueue.o ../cpqueue.o ../compositeprioqueue.o ../switch.o ../fairpullqueue.o ../route.o ../ffapp.o ../dyn_net_sch.o ../mixnet_topomanager.o#../taskgraph.pb.o
+OBJS=../eventlist.o ../tcppacket.o ../pipe.o ../queue.o ../queue_lossless.o ../queue_lossless_input.o ../queue_lossless_output.o ../ecnqueue.o ../tcp.o ../dctcp.o ../mtcp.o ../loggers.o ../logfile.o ../clock.o ../config.o ../network.o ../qcn.o ../exoqueue.o ../randomqueue.o ../cbr.o ../cbrpacket.o ../sent_packets.o ../ndp.o ../ndppacket.o ../eth_pause_packet.o ../compositequeue.o ../prioqueue.o ../cpqueue.o ../compositeprioqueue.o ../switch.o ../fairpullqueue.o ../route.o ../ffapp.o ../dyn_net_sch.o #../mixnet_topomanager.o#../taskgraph.pb.o
 
 all: htsim_tcp_fc htsim_tcp_fattree htsim_tcp_os_fattree htsim_tcp_flat htsim_tcp_aggosft htsim_tcp_dyn_flat htsim_tcp_fattree_multijob htsim_tcp_aggos_fattree_multijob htsim_tcp_mixnet
 
@@ -35,7 +35,7 @@ htsim_tcp_dyn_flat: main_tcp_dyn_flat.o firstfit.o flat_topology.o
 
 
 htsim_tcp_mixnet: main_tcp_mixnet.o firstfit.o fat_tree_topology.o mixnet.o
-	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_mixnet.o fat_tree_topology.o mixnet.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_mixnet
+	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_mixnet.o fat_tree_topology.o mixnet.o ../mixnet_topomanager.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_mixnet
 
 htsim_tcp_fc: main_tcp_fc.o firstfit.o  fc_topology.o
 	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_fc.o fc_topology.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_fc
