@@ -5,7 +5,7 @@ make clean
 
 cd ../ || exit
 make clean
-make
+make -j
 
 cd datacenter/ || exit
-make
+make -j
