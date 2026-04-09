@@ -773,7 +773,7 @@ void RegionalTopoManager::prepare_conn_cycle()
   };
 
   //std::vector<int> avail_conn(region_size, alpha);
-  for (int k = 1; k < 6; k++)
+  for (int k = 0; k < 6; k++)
   {
     for(int i = 0; i < region_size; i++) {
       for(int j = 0; j < region_size; j++) {
@@ -852,7 +852,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << std::endl;
+  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << std::endl;
   for (int i = 0; i < region_size; i++) {
     for (int j = 0; j < region_size; j++) {
       std::cerr << conn[i][j] << " ";
