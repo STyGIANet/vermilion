@@ -479,13 +479,22 @@ void Mixnet::create_one_connect() {
       for (int j = region_start; j < region_end; j++) {
         if (i==j)
         { 
-          conn[i][j] = 0;
+          conn[i][j] = 1; // self-connection
           continue;
         } 
         conn[i][j] = 1;
         conn[j][i] = 1;
        }
       }
+  }
+  // Print connection matrix
+  std::cerr << "Debug - Conn matrix (create_one_connect):" << std::endl;
+  assert(conn.size() != 0);
+  for (size_t i = 0; i < conn.size(); ++i) {
+    for (size_t j = 0; j < conn.size(); ++j) {
+      std::cerr << conn[i][j] << " ";
+    }
+    std::cerr << std::endl;
   }
   renew_routes_ocs(0, _no_of_nodes);
 }
