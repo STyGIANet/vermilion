@@ -16,3 +16,5 @@ src/clos/datacenter/logs/
 
 src/clos/datacenter/logs/
 src/clos/datacenter/htsim_tcp_*
+
+notes.txt
