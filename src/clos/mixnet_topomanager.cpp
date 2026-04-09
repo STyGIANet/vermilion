@@ -598,6 +598,14 @@ void RegionalTopoManager::update_regional_queue_bandwidth()
       }
     }
   }
+ //Printing the updated conn matrix for debugging
+  std::cout << "Updated conn matrix for region " << region_id << " at layer " << current_layer_id << ":" << std::endl;
+  for (int i = 0; i < region_size; i++) {
+    for (int j = 0; j < region_size; j++) {
+      std::cout << reconfig_conn_matrix[i][j] << " ";
+    }
+    std::cout << std::endl;
+  }
   // direct connect no need to update the path
   // topo->renew_routes_ocs(start_node, end_node); // update regional routes
 }
@@ -839,7 +847,8 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
 
   std::vector<std::vector<int>> conn(region_size, std::vector<int>(region_size, 0));
   conn = conn_cycle[conn_cycle_idx];         // Updating the regional conn matrix from the conn cycle
-  conn_cycle_idx = (conn_cycle_idx + 1) % conn_cycle.size(); // Deeksha: Rotate to next conn matrix
+  conn_cycle_idx++;
+  conn_cycle_idx = (conn_cycle_idx) % conn_cycle.size(); // Deeksha: Rotate to next conn matrix
   
   // update the conn of the topo
   // Debug print for conn matrix

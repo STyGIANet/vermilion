@@ -2207,11 +2207,11 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             2. we need to set the is_all2all and is_elec to facilitate the reconfig
             3. to consistent with other topology, the src/dst of flow should be gpu id we convert it inside the node, it only affect the logger info
     */
-    std::cerr << " FFAlltoAll::start_flow: "<<" from: "<< src_gpu << " to: "<< dst_gpu <<std::endl;
+    
     uint64_t flow_size;
     
     flow_size = operator_sizes[std::make_pair(src_gpu, dst_gpu)];
-    
+    std::cerr << " FFAlltoAll::start_flow: "<<" from "<< src_gpu << " to "<< dst_gpu <<" size " << flow_size <<" task id: " << this->taskid << std::endl;
     // f->src_idx = src_idx;
     // f->round = round;
     assert(ffapp->gpus[src_gpu]==src_gpu && ffapp->gpus[dst_gpu]==dst_gpu);
@@ -2247,6 +2247,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
+            std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_node << " dst_node " << dst_node << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         else {
             flowSrc->is_elec = true;
@@ -2254,6 +2255,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_eps_volume[src_node] += flow_size;
             // Update EPS volume statistics (received)
             node_eps_recv_volume[dst_node] += flow_size;
+                std::cerr << "flow goes through EPS, update EPS volume statistics: src_node " << src_node << " dst_node " << dst_node << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         // Update total volume statistics (sent)
         node_total_volume[src_node] += flow_size;
