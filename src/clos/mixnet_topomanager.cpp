@@ -236,11 +236,11 @@ void RegionalTopoManager::doNextEvent()
   {
     non_empty_queues = 0;
     set_regional_queues_pause_recved(); // recompute drain state without injecting new traffic
-    if (non_empty_queues == 0 )
-  { 
-     _do_reconf();
-    status = TopoStatus::TOPO_RECONF;
-  }
+      if (non_empty_queues == 0 )
+    { 
+      _do_reconf();
+      status = TopoStatus::TOPO_RECONF;
+    }
    
   else{
     eventlist.sourceIsPendingRel(*this, reconf_delay/10); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
@@ -370,6 +370,10 @@ void RegionalTopoManager::finish_reconf()
     eventlist.sourceIsPending(*this, eventlist.now() + periodic_interval);
     std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
   }
+  else
+  {
+    std::cout<< "No periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() << " paused_flow_count: " << paused_flow_count << std::endl;
+  }
 
   // Mark that we've completed at least one reconfiguration for this region
   first_reconf_done = true;
@@ -453,8 +457,12 @@ void RegionalTopoManager::set_regional_tcp_pause()
       // Only pause within this region to avoid tripping the global pause flag
       // that would block unrelated flows.
       //tcpsrc->pause_flow_in_region();
+      
+      paused_flow_count++;
       tcpsrc->pause_flow();
-      std::cout << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
+      
+      
+      std::cout << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
       if(tcpsrc->is_all2all && tcpsrc->is_elec)
       {
         std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is electric." << std::endl;
@@ -463,7 +471,7 @@ void RegionalTopoManager::set_regional_tcp_pause()
       {
         std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is optical." << std::endl;
       }
-      paused_flow_count++;
+      
     }
     // if (tcpsrc->is_all2all && is_in_region(tcpsrc))
     // {
@@ -510,7 +518,7 @@ void RegionalTopoManager::update_regional_route()
       else
       {
         // this flow is re-assigned to elec fabric
-        tcpsrc->is_elec = true; // Deeksha: For testing, keeping all flows in optical fabric, to do change this to true
+        tcpsrc->is_elec = false; // Deeksha: Trying to pause all flows which do not have direct connect for now, to avoid the complexity of route update for elec flows, to do: update route for elec flows as well
       }
       assert(tcpsrc->is_all2all);
       Route *routeout, *routein;
@@ -538,8 +546,7 @@ void RegionalTopoManager::resume_regional_tcp_flows()
   /*
     refer to DynFlatScheduler::resume_tcp_flows()
   */
-  // Clear any global pause state so region-local resumes can actually send.
-  TcpSrc::resume_all_flow();
+ int resumed_flows = 0;
   list<TcpSrc *>::iterator i = demandrecorder->rtx_scanner->_tcps.begin();
   while (i != demandrecorder->rtx_scanner->_tcps.end())
   {
@@ -547,12 +554,26 @@ void RegionalTopoManager::resume_regional_tcp_flows()
     if (is_in_region(tcpsrc))
     {
       assert(tcpsrc->is_all2all);
-      tcpsrc->resume_flow_in_region();
-      tcpsrc->resume_flow();
-      std::cout << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
+      int src_node = tcpsrc->_flow_src / NUM_GPU_PER_NODE;
+      int dst_node = tcpsrc->_flow_dst / NUM_GPU_PER_NODE;
+      // Only resume flows that have an active OCS connection in the current conn matrix.
+      if (topo->conn[src_node][dst_node] > 0)
+      {
+        //tcpsrc->resume_flow_in_region();
+        tcpsrc->resume_flow();
+        std::cout << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+        //paused_flow_count--;
+        resumed_flows++;
+        tcpsrc->tcp_flow_paused = false;
+      }
+      else
+      {
+        std::cout << "Keeping flow paused (no OCS conn) from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
+      }
     }
     i++;
   }
+  std::cout << "For region " << region_id << " Total flows resumed: " << resumed_flows << " out of " << paused_flow_count <<std::endl;
 }
 
 void RegionalTopoManager::update_regional_queue_bandwidth()
@@ -822,7 +843,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << std::endl;
+  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << std::endl;
   for (int i = 0; i < region_size; i++) {
     for (int j = 0; j < region_size; j++) {
       std::cerr << conn[i][j] << " ";

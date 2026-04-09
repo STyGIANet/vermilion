@@ -437,7 +437,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
                 this_task.target_layer_id(),
                 this_task.runtime()
             );
-            cout<<" log1 task id "<<this_task.taskid()<<" created alltoall task "<<tasks[this_task.taskid()]->name<< "microbatch id" << this_task.micro_batch_id()<<"layer id " << this_task.layer_id() << " transfer size " << total_xfer_size<<endl;
+            cout<<" log1 task id "<<this_task.taskid()<<" created alltoall task "<<tasks[this_task.taskid()]->name<< " microbatch id " << this_task.micro_batch_id()<<" layer id " << this_task.layer_id() << " transfer size " << total_xfer_size<<endl;
         }
         else if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_P2P) {
             // P2P
