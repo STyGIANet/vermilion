@@ -243,9 +243,9 @@ void RegionalTopoManager::doNextEvent()
     }
    
   else{
-    eventlist.sourceIsPendingRel(*this, reconf_delay/10); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
-    std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
-    status = TopoStatus::TOPO_WAIT_DRAIN;
+      eventlist.sourceIsPendingRel(*this, reconf_delay/10); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+      std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
+      status = TopoStatus::TOPO_WAIT_DRAIN;
   }
   }
   else
@@ -391,25 +391,19 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
       if(eq->queuesize() > 0)
       {
-        std::cout<<"Queue"<< eq->_enqueued.size()<< std::endl;
-        // while(!eq->_enqueued.empty()) //Deeksha: Draining the queue
-        // {
-        //   std::cout << "Draining queue " << i << ", " << j << " size " << eq->_enqueued.size() << "state" << eq->_state_send <<std::endl;
-        //   //eq->completeService();
-        //   std::cout<< "Check waiting for draining queue" << std::endl;
-        //  if(eq->_state_send==LosslessQueue::READY)
-        //  std::cout << "Ready"<<std::endl;
-          
-        // }
+        std::cout << "Queue" << eq->_enqueued.size()
+                  << " state=" << eq->_state_send << std::endl;
         // Allow existing backlog to drain; flows are paused so no new packets enter
-        eq->_state_send = LosslessQueue::READY;
-        
+        // Treat both PAUSED and PAUSE_RECEIVED as needing an explicit resume. // vamsi
+        if (eq->_state_send == LosslessQueue::PAUSED ||
+            eq->_state_send == LosslessQueue::PAUSE_RECEIVED) {
+          eq->_state_send = LosslessQueue::READY;
+          if (!eq->_enqueued.empty()) {
+            eq->beginService();
+          }
+        }
+
         non_empty_queues += eq->_enqueued.size();
-        // if (!eq->_enqueued.empty() && eq->_state_send != LosslessQueue::PAUSED)
-        // {
-        //   /* schedule the next dequeue event */
-        //   eq->beginService();
-        // }
         // std::cerr << i << ", " << j << " qsz " << eq->_enqueued.size() << " bw " << eq->_bitrate << std::endl;
       }
       
@@ -419,18 +413,15 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
         // {
         //   p->_inflight.pop_front();
         // }
-        
-          //Do nothing, just counting the inflight packets
-          std::cerr << "Draining pipe " << i << ", " << j << " size " << p->_inflight.size() <<std::endl;
-          std::cout<< "*Check*" << std::endl;
-        
+
+        //Do nothing, just counting the inflight packets
+        std::cerr << "Draining pipe " << i << ", " << j << " size " << p->_inflight.size() <<std::endl;
+        std::cout<< "*Check*" << std::endl;
+
+        // vamsi: only account inflight packets; don't change queue state here
         non_empty_queues += p->_inflight.size();
         //std::cout<<"Inflight packet types in pipe p->type "<< p->type << std::endl;
         std::cout<<"Pipe "<<i<<","<<j<<" size "<<p->_inflight.size()<< std::endl;
-      }
-      else
-      {
-        eq->_state_send = LosslessQueue::PAUSED;
       }
         
     }
@@ -456,10 +447,8 @@ void RegionalTopoManager::set_regional_tcp_pause()
       assert(tcpsrc->is_all2all);
       // Only pause within this region to avoid tripping the global pause flag
       // that would block unrelated flows.
-      //tcpsrc->pause_flow_in_region();
-      
+      tcpsrc->pause_flow_in_region(); // vamsi: use per-flow regional pause instead of global pause
       paused_flow_count++;
-      tcpsrc->pause_flow();
       
       
       std::cout << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
@@ -559,12 +548,12 @@ void RegionalTopoManager::resume_regional_tcp_flows()
       // Only resume flows that have an active OCS connection in the current conn matrix.
       if (topo->conn[src_node][dst_node] > 0)
       {
-        //tcpsrc->resume_flow_in_region();
+        // vamsi: clear regional pause flag and resume the flow
+        tcpsrc->resume_flow_in_region();
         tcpsrc->resume_flow();
         std::cout << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
         //paused_flow_count--;
         resumed_flows++;
-        tcpsrc->tcp_flow_paused = false;
       }
       else
       {
