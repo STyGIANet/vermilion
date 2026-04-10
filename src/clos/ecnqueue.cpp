@@ -65,7 +65,7 @@ void ECNQueue::receivePacket(Packet &pkt)
 	//    if (_queuesize > _K)
 	//  pkt.set_flags(pkt.flags() | ECN_CE);
 
-	/* enqueue the packet */
+		/* enqueue the packet */
 	bool queueWasEmpty = _enqueued.empty();
 	_enqueued.push_front(&pkt);
 	_queuesize += pkt.size();
