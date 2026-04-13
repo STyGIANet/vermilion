@@ -1,61 +1,21 @@
-# Prerequisites
-*.d
+# Ignore large model files
+mixnet_flatbuf/
 
-# Compiled Object files
-*.slo
-*.lo
+# Or specific files
+*.fbuf
+*.json
+
+# Ignore object files
 *.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
 *.a
-*.lib
-
-# Executables
-*.exe
+*.so
 *.out
-*.app
 
-*.mat
-*.dat
+src/clos/datacentre/logs/
+src/clos/datacenter/logs/
 
-htsim_tcp_*
+src/clos/datacenter/logs/
 src/clos/datacenter/htsim_tcp_*
 
-# ccls
-.ccls-cache/
-
-# gdb
-.gdb_history
-
-# taskgraph
-test/*.fbuf
-
-# log
-src/clos/datacenter/logs/*
-.DS_Store
-
-# experiment log
-mixnet_scripts/*
-!mixnet_scripts/compile.sh
-!mixnet_scripts/onestage_mixtral_8x22B_fattree.sh
-!mixnet_scripts/onestage_mixtral_8x22B_mixnet.sh
-!mixnet_scripts/mixtral_8x22B_fattree.sh
-!mixnet_scripts/mixtral_8x22B_mixnet.sh
-
-.vscode/*
+notes.txt
+src/clos/libhtsim.a

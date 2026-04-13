@@ -213,7 +213,7 @@ int main(int argc, char **argv)
     }
     else if (!strcmp(argv[i], "-rdelay"))
     {
-      reconf_delay = atoi(argv[i + 1]);
+      reconf_delay = atof(argv[i + 1]);
       cout << "reconf_delay " << reconf_delay << endl;
       i++;
     }
@@ -395,9 +395,9 @@ int main(int argc, char **argv)
 
   FatTreeTopology *fattree = new FatTreeTopology(fattree_node, queuesize, nullptr /*&logfile*/, &eventlist, ff, ECN, link_speed); // pass the link speed to the fat tree topology
 
-  Mixnet *topo = new Mixnet(no_of_nodes, queuesize, nullptr /* &logfile */, eventlist, ff, ECN, 1000000000ULL * reconf_delay, fattree, alpha,dp_degree,tp_degree,pp_degree,ep_degree);
+  Mixnet *topo = new Mixnet(no_of_nodes, queuesize, nullptr /* &logfile */, eventlist, ff, ECN, 1000ULL * reconf_delay, fattree, alpha,dp_degree,tp_degree,pp_degree,ep_degree);
 
-  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000000000ULL * reconf_delay, eventlist);
+  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000ULL * reconf_delay, eventlist);
   
   FFApplication app = FFApplication(topo, ssthresh, logdir, &fct_util_out_ocs, tcpRtxScanner, eventlist, FFApplication::FF_DEFAULT_AR,1,&fct_util_out_ecs, topomanager);
   

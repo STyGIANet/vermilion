@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cd ~/mixnet-htsim/src/clos/datacenter || exit
+make clean
+
+cd ../ || exit
+make clean
+make
+
+cd datacenter/ || exit
+make

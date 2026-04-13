@@ -2330,6 +2330,12 @@ void finish_alltoall(void * a2ainfo) {
         std::cerr << "finish_alltoall_task "<< " total rounds "<< a2a_task->total_rounds << " intra node routing num "<< a2a->intra_node_routing << std::endl;
         a2a_task->finish_time = max(a2a_task->finish_time, a2a_task->eventlist().now());
         a2a_task->run_time = a2a_task->finish_time - a2a_task->start_time;
+        std::cerr << "alltoall timing task_id " << a2a_task->taskid
+                  << " layer " << a2a_task->layer_id
+                  << " micro_batch " << a2a_task->micro_batch_id
+                  << " start " << a2a_task->start_time
+                  << " finish " << a2a_task->finish_time
+                  << " duration " << a2a_task->run_time << std::endl;
         a2a_task->cleanup();
     }
 }
