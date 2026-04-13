@@ -22,6 +22,7 @@ using json = nlohmann::json;
 
 int FFApplication::total_apps = 0;
 int FFApplication::finished_apps = 0;
+int FFApplication::debug_exit;
 bool check_maps_equal(const std::unordered_map<std::pair<int, int>, uint64_t, pair_hash> map1,
                       const std::unordered_map<std::pair<int, int>, uint64_t, pair_hash> map2) {
     if (map1.size() != map2.size()) {
@@ -2364,7 +2365,8 @@ void finish_alltoall(void * a2ainfo) {
                   << " finish " << a2a_task->finish_time
                   << " duration " << a2a_task->run_time << std::endl;
         a2a_task->cleanup();
-     exit(0);
+        if (FFApplication::debug_exit)
+            exit(0);
     }
 }
 

@@ -529,6 +529,7 @@ public:
 
     static int total_apps;
     static int finished_apps;
+    static int debug_exit;
 
     std::vector<int> gpus;
     simtime_picosec final_finish_time;

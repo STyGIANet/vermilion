@@ -151,6 +151,8 @@ int main(int argc, char **argv)
   bool periodic_reconf = true;
   float periodic_interval_us = 0.0005;
 
+  int debug = 0;
+
   // stringstream filename(ios_base::out);
   int i = 1;
   // filename << "logout.dat";
@@ -310,6 +312,12 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[i], "-utiltime"))
     {
       utiltime = atof(argv[i + 1]);
+      i++;
+    }
+    else if (!strcmp(argv[i], "-debug"))
+    {
+      debug = atoi(argv[i + 1]);
+      FFApplication::debug_exit = debug;
       i++;
     }
     else
