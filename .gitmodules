@@ -1,0 +1,4 @@
+[submodule "mixnet-htsim"]
+	path = mixnet-htsim
+	url = git@github.com:STyGIANet/vermilion.git
+	branch = mixnet
