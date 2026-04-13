@@ -416,10 +416,10 @@ int main(int argc, char **argv)
 
   FatTreeTopology *fattree = new FatTreeTopology(fattree_node, queuesize, nullptr /*&logfile*/, &eventlist, ff, ECN, link_speed); // pass the link speed to the fat tree topology
 
-  Mixnet *topo = new Mixnet(no_of_nodes, queuesize, nullptr /* &logfile */, eventlist, ff, ECN, 1000000ULL * reconf_delay, fattree, alpha,dp_degree,tp_degree,pp_degree,ep_degree);
+  Mixnet *topo = new Mixnet(no_of_nodes, queuesize, nullptr /* &logfile */, eventlist, ff, ECN, 1000ULL * reconf_delay, fattree, alpha,dp_degree,tp_degree,pp_degree,ep_degree);
   int periodic_interval_us_effective = periodic_interval_us;
   //int periodic_interval_us_effective = (periodic_interval_us < 0 ? reconf_delay : periodic_interval_us);
-  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000000ULL * reconf_delay, eventlist, periodic_reconf, 1000000ULL * periodic_interval_us_effective);
+  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000ULL * reconf_delay, eventlist, periodic_reconf, 1000ULL * periodic_interval_us_effective);
   
   FFApplication app = FFApplication(topo, ssthresh, logdir, &fct_util_out_ocs, tcpRtxScanner, eventlist, FFApplication::FF_DEFAULT_AR,1,&fct_util_out_ecs, topomanager);
   

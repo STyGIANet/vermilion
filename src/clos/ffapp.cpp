@@ -1086,9 +1086,9 @@ void FFTask::cleanup() {
                     // reset per-layer periodic reconf state
                     ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
                     ffapp->topomanager->demandrecorder->dump_all_traffic_matrices(layer_id, region_id, all2all_task->all2all_traffic_matrix);        //Deeksha: For debugging purpose
-                    ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
+                    //ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
                     //Performing append (as above ) with normalized and scaled traffic matrix inside update traffic matrix function 
-                    //ffapp->topomanager->demandrecorder->NormalizeTrafficMatrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);
+                    ffapp->topomanager->demandrecorder->NormalizeTrafficMatrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);
                     assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));// it must be true  //Deeksha: base will be true if append is done correctly, this function checks only the base
                     eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
                     //cout << "forward groupby task trigger reconfig at "<< eventlist().now() << std::endl;
