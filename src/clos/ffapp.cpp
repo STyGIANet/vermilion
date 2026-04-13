@@ -2364,6 +2364,7 @@ void finish_alltoall(void * a2ainfo) {
                   << " finish " << a2a_task->finish_time
                   << " duration " << a2a_task->run_time << std::endl;
         a2a_task->cleanup();
+     exit(0);
     }
 }
 
