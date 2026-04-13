@@ -29,7 +29,7 @@ for algorithm in "vermilion" "mixnet";do
             for r in "${rdelay[@]}"; do
                 for workload in "${workloads[@]}"; do
                     DUMP_DIR=$REPO_DIR/logs/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
-                    # Note: r and periodic_interval are both in microsecond units
+                    # Note: r and periodic_interval are both in nanoseconds units
                     periodic_interval=$(python3 -c "print($r * 10)")
                     mkdir -p $DUMP_DIR
                     $ALG_DIR/htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 8 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_us $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
