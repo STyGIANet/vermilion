@@ -22,3 +22,6 @@ notes.txt
 src/clos/libhtsim.a
 
 logs/
+
+mixnet_scripts/compile_error.txt
+mixnet_scripts/compile_output.txt
