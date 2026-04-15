@@ -19,3 +19,6 @@ src/clos/datacenter/htsim_tcp_*
 
 notes.txt
 src/clos/libhtsim.a
+
+mixnet_scripts/compile_error.txt
+mixnet_scripts/compile_output.txt
