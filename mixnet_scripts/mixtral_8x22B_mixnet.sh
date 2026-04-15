@@ -10,7 +10,7 @@ REPO_DIR="$(dirname "$SCRIPT_DIR../")"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 
 DEBUG=4
-COMPILE=0
+COMPILE=1
 
 for algorithm in "vermilion" "mixnet";do
    
