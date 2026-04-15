@@ -243,7 +243,7 @@ void RegionalTopoManager::doNextEvent()
     }
    
   else{
-      eventlist.sourceIsPendingRel(*this, reconf_delay/10); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+      eventlist.sourceIsPendingRel(*this, 1000000); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
       std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
       status = TopoStatus::TOPO_WAIT_DRAIN;
   }
@@ -270,7 +270,7 @@ void RegionalTopoManager::start_reconf()
   }
    
   else{
-    eventlist.sourceIsPendingRel(*this, 1000); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+    eventlist.sourceIsPendingRel(*this, 1000000); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
     std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
     status = TopoStatus::TOPO_WAIT_DRAIN;
   }
