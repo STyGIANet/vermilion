@@ -411,7 +411,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
                         }
                         //Deeksha: Debugging 
                         //cout<<" from_node "<<fn<<" to_node "<<tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<"tp degree" <<tp_degree<<"EP Degree"<<ep_degree<<endl;
-                        cout<<" log3 task id "<<this_task.taskid()<<" from_node "<<fn<<" to_node "<<tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<"tp degree" <<tp_degree<<"EP Degree"<<ep_degree<<endl;
+                        cout<<" log3 task id "<<this_task.taskid()<<" from_node "<<fn<<" to_node "<<tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<" tp degree" <<tp_degree<<" EP Degree"<<ep_degree<<endl;
                     }
                 }
 
@@ -1073,8 +1073,9 @@ void FFTask::cleanup() {
         if (task->counter == 0) {
             task->ready_time = finish_time;
             task->state = FFTask::TASK_READY;
-            if(task->type == FFTask::TASK_ALLTOALL && task->info.find("GROUP_BY forward") != std::string::npos && ffapp->is_mixnet && ffapp->topomanager){
+            if(task->type == FFTask::TASK_ALLTOALL && ((task->info.find("GROUP_BY forward") != std::string::npos)||task->info.find("AGGREGATE") != std::string::npos) && ffapp->is_mixnet && ffapp->topomanager){
                 FFAlltoAll* all2all_task = dynamic_cast<FFAlltoAll*>(task);
+                
                 all2all_task->updatetrafficmatrix();
                 // Trigger reconfiguration
                 int region_id = (all2all_task->from_node_ids[0] / 8) / ffapp->topomanager->region_size;
@@ -1087,6 +1088,7 @@ void FFTask::cleanup() {
                     ffapp->topomanager->regional_topo_managers[region_id]->current_micro_batch_id = micro_batch_id;
                     // reset per-layer periodic reconf state
                     ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
+                    ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_idx =0;
                     //ffapp->topomanager->demandrecorder->dump_all_traffic_matrices(layer_id, region_id, all2all_task->all2all_traffic_matrix);        //Deeksha: For debugging purpose
                     ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
                     //Performing append (as above ) with normalized and scaled traffic matrix inside update traffic matrix function 
@@ -2183,7 +2185,7 @@ void FFAlltoAll::doNextEvent() {
         }
     }
     
-    std::cerr<< " all2all task " << " total rounds " << total_rounds << std::endl;
+    std::cerr<< " all2all task " << " total rounds " << total_rounds <<" from node id size: " << from_node_ids.size() << " to node id size: " << to_node_ids.size() << std::endl;
     
     // Start flows
     for (size_t i = 0; i < from_node_ids.size()/ffapp->tp_degree; i++) {
@@ -2249,15 +2251,22 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
-            std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_node << " dst_node " << dst_node << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+            std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         else {
-            flowSrc->is_elec = true;
-            // Update EPS volume statistics (sent)
-            node_eps_volume[src_node] += flow_size;
-            // Update EPS volume statistics (received)
-            node_eps_recv_volume[dst_node] += flow_size;
-                std::cerr << "flow goes through EPS, update EPS volume statistics: src_node " << src_node << " dst_node " << dst_node << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+            //Add tje flow to ocs but pause the flow immediately, we will resume the flow after reconfig
+            flowSrc->is_elec = false; //Deeksha: All electric works well getting back to ocs for debugging
+            // Update OCS volume statistics (sent)
+            node_ocs_volume[src_node] += flow_size;
+            // Update OCS volume statistics (received)
+            node_ocs_recv_volume[dst_node] += flow_size;
+                std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+            // flowSrc->is_elec = true;
+            // // Update EPS volume statistics (sent)
+            // node_eps_volume[src_node] += flow_size;
+            // // Update EPS volume statistics (received)
+            // node_eps_recv_volume[dst_node] += flow_size;
+            //     std::cerr << "flow goes through EPS, update EPS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         // Update total volume statistics (sent)
         node_total_volume[src_node] += flow_size;

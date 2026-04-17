@@ -131,7 +131,7 @@ int main(int argc, char **argv)
   int degree = DEFAULT_DEGREE;
   float reconf_delay = DEFAULT_RECONF_DELAY;
   string opt_method = "sipring";
-  int alpha = 6;
+  int alpha = 4;
   int no_of_nodes = DEFAULT_NODES;
 
   // Default flowfile path
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
   int ep_degree;
   //Deeksha: for periodic reconf`iguration
   bool periodic_reconf = true;
-  float periodic_interval_us = 0.0005;
+  float periodic_interval_ns = 0.0005;
 
   int debug = 0;
 
@@ -213,10 +213,10 @@ int main(int argc, char **argv)
       cout << "periodic_reconf " << periodic_reconf << endl;
       i++;
     }
-    else if (!strcmp(argv[i], "-periodic_interval_us"))
+    else if (!strcmp(argv[i], "-periodic_interval_ns"))
     {
-      periodic_interval_us = std::atof(argv[i + 1]);
-      cout << "periodic_interval_us " << periodic_interval_us << endl;
+      periodic_interval_ns = std::atof(argv[i + 1]);
+      cout << "periodic_interval_ns " << periodic_interval_ns << endl;
       i++;
     }
     else if (!strcmp(argv[i], "-ssthresh"))
@@ -405,7 +405,7 @@ int main(int argc, char **argv)
   std::cout << "queuesize: " << queuesize << std::endl;
   std::cout << "reconf_delay: " << reconf_delay << std::endl;
   std::cout << "periodic_reconf: " << periodic_reconf << std::endl;     //Deeksha: for periodic reconfiguration
-  std::cout << "periodic_interval_us: " << periodic_interval_us; //(periodic_interval_us < 0 ? reconf_delay : periodic_interval_us) << std::endl;
+  std::cout << "periodic_interval_ns: " << periodic_interval_ns; //(periodic_interval_ns < 0 ? reconf_delay : periodic_interval_ns) << std::endl;
   std::cout << "dp_degree: " << dp_degree << std::endl;
   std::cout << "tp_degree: " << tp_degree << std::endl;
   std::cout << "pp_degree: " << pp_degree << std::endl;
@@ -425,9 +425,9 @@ int main(int argc, char **argv)
   FatTreeTopology *fattree = new FatTreeTopology(fattree_node, queuesize, nullptr /*&logfile*/, &eventlist, ff, ECN, link_speed); // pass the link speed to the fat tree topology
 
   Mixnet *topo = new Mixnet(no_of_nodes, queuesize, nullptr /* &logfile */, eventlist, ff, ECN, 1000ULL * reconf_delay, fattree, alpha,dp_degree,tp_degree,pp_degree,ep_degree);
-  int periodic_interval_us_effective = periodic_interval_us;
-  //int periodic_interval_us_effective = (periodic_interval_us < 0 ? reconf_delay : periodic_interval_us);
-  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000ULL * reconf_delay, eventlist, periodic_reconf, 1000ULL * periodic_interval_us_effective);
+  int periodic_interval_ns_effective = periodic_interval_ns;
+  //int periodic_interval_ns_effective = (periodic_interval_ns < 0 ? reconf_delay : periodic_interval_ns);
+  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000ULL * reconf_delay, eventlist, periodic_reconf, 1000ULL * periodic_interval_ns_effective);
   
   FFApplication app = FFApplication(topo, ssthresh, logdir, &fct_util_out_ocs, tcpRtxScanner, eventlist, FFApplication::FF_DEFAULT_AR,1,&fct_util_out_ecs, topomanager);
   

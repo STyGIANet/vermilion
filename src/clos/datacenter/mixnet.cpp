@@ -144,7 +144,7 @@ void Mixnet::init_network()
         queues[k][j]->setName("L" + ntoa(k) + "->DST" + ntoa(j));
         // logfile->writeName(*(queues[j][k]));
         // logfile->writeName(*(queues[k][j]));
-
+        //cout<<"RTT: "<<RTT<<" ns"<<endl;      //It is in nanoseconds unit
         pipes[j][k] = new Pipe(timeFromNs(RTT), eventlist);
         pipes[k][j] = new Pipe(timeFromNs(RTT), eventlist);
         pipes[j][k]->setName("Pipe-LS" + ntoa(j) + "->DST" + ntoa(k));
@@ -210,7 +210,11 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
 
       for (size_t i = 0; i < route.size() - 1; i++)
       {
+        //cerr << "route " << i << " " << route[i] << "->" << route[i + 1] << "Queue" << queues[route[i]][route[i + 1]] << endl;
         assert(queues[route[i]][route[i + 1]] != nullptr);
+        if(queues[route[i]][route[i + 1]]->_bitrate==0) {
+          cerr << "route " << i << " " << route[i] << "->" << route[i + 1] << "Queue" << queues[route[i]][route[i + 1]]->_bitrate << endl;
+        }
         assert(queues[route[i]][route[i + 1]]->_bitrate!=0);
         routeout->push_back(queues[route[i]][route[i + 1]]);
         routeout->push_back(pipes[route[i]][route[i + 1]]);
