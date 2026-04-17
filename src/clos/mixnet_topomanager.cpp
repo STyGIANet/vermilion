@@ -243,7 +243,7 @@ void RegionalTopoManager::doNextEvent()
     }
    
   else{
-      eventlist.sourceIsPendingRel(*this, 120000); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+      eventlist.sourceIsPendingRel(*this, timeFromNs(10)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
       std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
       status = TopoStatus::TOPO_WAIT_DRAIN;
   }
@@ -270,7 +270,7 @@ void RegionalTopoManager::start_reconf()
   }
    
   else{
-    eventlist.sourceIsPendingRel(*this, 120000); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+    eventlist.sourceIsPendingRel(*this, timeFromNs(10)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
     std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
     status = TopoStatus::TOPO_WAIT_DRAIN;
   }
@@ -451,7 +451,7 @@ void RegionalTopoManager::set_regional_tcp_pause()
       paused_flow_count++;
       
       
-      std::cout << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+      std::cerr << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
       if(tcpsrc->is_all2all && tcpsrc->is_elec)
       {
         std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is electric." << std::endl;
@@ -551,7 +551,7 @@ void RegionalTopoManager::resume_regional_tcp_flows()
         // vamsi: clear regional pause flag and resume the flow
         tcpsrc->resume_flow_in_region();
         tcpsrc->resume_flow();
-        std::cout << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+        std::cerr << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
         //paused_flow_count--;
         resumed_flows++;
       }
