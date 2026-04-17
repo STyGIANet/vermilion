@@ -6,7 +6,8 @@ declare -a rdelay=(1)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR../")"
+REPO_DIR="$(dirname $SCRIPT_DIR)"
+LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 
 DEBUG=5
@@ -20,7 +21,7 @@ for algorithm in "vermilion" "mixnet";do
         if [[ $COMPILE -eq 1 ]]; then
             echo "##### Compiling $algorithm ######"
             cd $SCRIPT_DIR
-            ./compile.sh > $SCRIPT_DIR/compile_output.txt 2> $SCRIPT_DIR/compile_error.txt
+            ./compile.sh > $LOG_DIR/vermilion_compile_output.txt 2> $LOG_DIR/vermilion_compile_error.txt
             echo "##### Compiled Vermilion ######"
         fi
     elif [[ $algorithm == "mixnet" ]];then
@@ -28,7 +29,7 @@ for algorithm in "vermilion" "mixnet";do
          if [[ $COMPILE -eq 1 ]]; then
             echo "##### Compiling $algorithm ######"
             cd $REPO_DIR/mixnet-htsim/mixnet_scripts/
-            ./compile.sh > $REPO_DIR/mixnet-htsim/mixnet_scripts/compile_output.txt 2> $REPO_DIR/mixnet-htsim/mixnet_scripts/compile_error.txt
+            ./compile.sh > $LOG_DIR/mixnet_compile_output.txt 2> $LOG_DIR/mixnet_compile_error.txt
             echo "##### Compiled MixNet ######"
         fi
     fi
@@ -38,7 +39,7 @@ for algorithm in "vermilion" "mixnet";do
         for b in "${bw[@]}"; do
             for r in "${rdelay[@]}"; do
                 for workload in "${workloads[@]}"; do
-                    DUMP_DIR=$REPO_DIR/logs/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
+                    DUMP_DIR=$LOG_DIR/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
                     # Note: r and periodic_interval are both in nanoseconds units
                     periodic_interval=$(python3 -c "print($r * 477)")
                     mkdir -p $DUMP_DIR
