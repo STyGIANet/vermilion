@@ -1073,9 +1073,8 @@ void FFTask::cleanup() {
         if (task->counter == 0) {
             task->ready_time = finish_time;
             task->state = FFTask::TASK_READY;
-            if(task->type == FFTask::TASK_ALLTOALL && ((task->info.find("GROUP_BY forward") != std::string::npos)||task->info.find("AGGREGATE") != std::string::npos) && ffapp->is_mixnet && ffapp->topomanager){
+            if(task->type == FFTask::TASK_ALLTOALL && task->info.find("GROUP_BY forward") != std::string::npos && ffapp->is_mixnet && ffapp->topomanager){
                 FFAlltoAll* all2all_task = dynamic_cast<FFAlltoAll*>(task);
-                
                 all2all_task->updatetrafficmatrix();
                 // Trigger reconfiguration
                 int region_id = (all2all_task->from_node_ids[0] / 8) / ffapp->topomanager->region_size;

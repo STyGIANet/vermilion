@@ -7,33 +7,6 @@ network.cpp: In function ‘void print_route(const Route&)’:
 network.cpp:185:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {aka ‘long unsigned int’} [-Wsign-compare]
   185 |     for (int i = 0; i < route.size(); i++) {
       |                     ~~^~~~~~~~~~~~~~
-fairpullqueue.cpp: In instantiation of ‘void FifoPullQueue<PullPkt>::enqueue(PullPkt&) [with PullPkt = NdpPull]’:
-fairpullqueue.cpp:160:16:   required from here
-fairpullqueue.cpp:23:51: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
-   23 |     if (this->_preferred_flow>=0 && pkt.flow_id() == this->_preferred_flow){
-      |                                     ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
-fairpullqueue.cpp:27:68: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
-   27 |         while (it!=_pull_queue.end()&& ((PullPkt*)(*it))->flow_id()==this->_preferred_flow)
-      |                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
-In file included from config.h:7,
-                 from fairpullqueue.h:10,
-                 from fairpullqueue.cpp:2:
-fairpullqueue.cpp:36:30: warning: comparison of integer expressions of different signedness: ‘int32_t’ {aka ‘int’} and ‘std::__cxx11::list<NdpPull*, std::allocator<NdpPull*> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
-   36 |     assert(this->_pull_count == _pull_queue.size());
-      |            ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-fairpullqueue.cpp: In instantiation of ‘PullPkt* FifoPullQueue<PullPkt>::dequeue() [with PullPkt = NdpPull]’:
-fairpullqueue.cpp:160:16:   required from here
-fairpullqueue.cpp:50:30: warning: comparison of integer expressions of different signedness: ‘int32_t’ {aka ‘int’} and ‘std::__cxx11::list<NdpPull*, std::allocator<NdpPull*> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
-   50 |     assert(this->_pull_count == _pull_queue.size());
-      |            ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-fairpullqueue.cpp: In instantiation of ‘void FifoPullQueue<PullPkt>::flush_flow(int32_t) [with PullPkt = NdpPull; int32_t = int]’:
-fairpullqueue.cpp:160:16:   required from here
-fairpullqueue.cpp:60:29: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
-   60 |         if (pull->flow_id() == flow_id && pull->type() == NDPPULL) {
-      |             ~~~~~~~~~~~~~~~~^~~~~~~~~~
-fairpullqueue.cpp:68:30: warning: comparison of integer expressions of different signedness: ‘int32_t’ {aka ‘int’} and ‘std::__cxx11::list<NdpPull*, std::allocator<NdpPull*> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
-   68 |     assert(this->_pull_count == _pull_queue.size());
-      |            ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
 In file included from ndp.cpp:4:
 ndp.h: In constructor ‘NdpSrc::NdpSrc(NdpLogger*, TrafficLogger*, EventList&, int, int, void (*)(void*), void*)’:
 ndp.h:166:16: warning: ‘NdpSrc::_flow’ will be initialized after [-Wreorder]
@@ -65,6 +38,33 @@ compositeprioqueue.cpp: In member function ‘void CompositePrioQueue::trim_low_
 compositeprioqueue.cpp:329:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘uint32_t’ {aka ‘unsigned int’} [-Wsign-compare]
   329 |     for (int c = 0; c <= _max_path_len_seen; c++) {
       |                     ~~^~~~~~~~~~~~~~~~~~~~~
+fairpullqueue.cpp: In instantiation of ‘void FifoPullQueue<PullPkt>::enqueue(PullPkt&) [with PullPkt = NdpPull]’:
+fairpullqueue.cpp:160:16:   required from here
+fairpullqueue.cpp:23:51: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
+   23 |     if (this->_preferred_flow>=0 && pkt.flow_id() == this->_preferred_flow){
+      |                                     ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+fairpullqueue.cpp:27:68: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
+   27 |         while (it!=_pull_queue.end()&& ((PullPkt*)(*it))->flow_id()==this->_preferred_flow)
+      |                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+In file included from config.h:7,
+                 from fairpullqueue.h:10,
+                 from fairpullqueue.cpp:2:
+fairpullqueue.cpp:36:30: warning: comparison of integer expressions of different signedness: ‘int32_t’ {aka ‘int’} and ‘std::__cxx11::list<NdpPull*, std::allocator<NdpPull*> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+   36 |     assert(this->_pull_count == _pull_queue.size());
+      |            ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+fairpullqueue.cpp: In instantiation of ‘PullPkt* FifoPullQueue<PullPkt>::dequeue() [with PullPkt = NdpPull]’:
+fairpullqueue.cpp:160:16:   required from here
+fairpullqueue.cpp:50:30: warning: comparison of integer expressions of different signedness: ‘int32_t’ {aka ‘int’} and ‘std::__cxx11::list<NdpPull*, std::allocator<NdpPull*> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+   50 |     assert(this->_pull_count == _pull_queue.size());
+      |            ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+fairpullqueue.cpp: In instantiation of ‘void FifoPullQueue<PullPkt>::flush_flow(int32_t) [with PullPkt = NdpPull; int32_t = int]’:
+fairpullqueue.cpp:160:16:   required from here
+fairpullqueue.cpp:60:29: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int32_t’ {aka ‘int’} [-Wsign-compare]
+   60 |         if (pull->flow_id() == flow_id && pull->type() == NDPPULL) {
+      |             ~~~~~~~~~~~~~~~~^~~~~~~~~~
+fairpullqueue.cpp:68:30: warning: comparison of integer expressions of different signedness: ‘int32_t’ {aka ‘int’} and ‘std::__cxx11::list<NdpPull*, std::allocator<NdpPull*> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+   68 |     assert(this->_pull_count == _pull_queue.size());
+      |            ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
 ndp.cpp: In constructor ‘NdpPullPacer::NdpPullPacer(EventList&, char*)’:
 ndp.cpp:1239:15: warning: ignoring return value of ‘int fscanf(FILE*, const char*, ...)’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
  1239 |         fscanf(f,"%d\n",&_pull_spacing_cdf_count);
@@ -115,40 +115,6 @@ mixnet_topomanager.cpp: In member function ‘void RegionalTopoManager::prepare_
 mixnet_topomanager.cpp:959:21: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::vector<std::vector<int> > >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
   959 |   for (int k = 0; k < conn.size(); k++)  //Deeksha :CHeck this later
       |                   ~~^~~~~~~~~~~~~
-mixnet_topomanager.h: In constructor ‘MixnetTopoManager::MixnetTopoManager(Mixnet*, All2AllTrafficRecorder*, simtime_picosec, EventList&, bool, simtime_picosec)’:
-mixnet_topomanager.h:120:28: warning: ‘MixnetTopoManager::demandrecorder’ will be initialized after [-Wreorder]
-  120 |   All2AllTrafficRecorder * demandrecorder;
-      |                            ^~~~~~~~~~~~~~
-mixnet_topomanager.h:117:19: warning:   ‘simtime_picosec MixnetTopoManager::reconf_delay’ [-Wreorder]
-  117 |   simtime_picosec reconf_delay;
-      |                   ^~~~~~~~~~~~
-mixnet_topomanager.cpp:1088:1: warning:   when initialized here [-Wreorder]
- 1088 | MixnetTopoManager::MixnetTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, bool periodic_reconf, simtime_picosec periodic_interval)
-      | ^~~~~~~~~~~~~~~~~
-In file included from tcp.cpp:2:
-tcp.h: In constructor ‘TcpSrc::TcpSrc(TcpLogger*, TrafficLogger*, std::ofstream*, EventList&, int, int, void (*)(void*), void*)’:
-tcp.h:602:16: warning: ‘TcpSrc::_flow’ will be initialized after [-Wreorder]
-  602 |     PacketFlow _flow;
-      |                ^~~~~
-tcp.h:588:9: warning:   ‘int TcpSrc::_flow_src’ [-Wreorder]
-  588 |     int _flow_src; // the sender (source) for this flow
-      |         ^~~~~~~~~
-tcp.cpp:16:1: warning:   when initialized here [-Wreorder]
-   16 | TcpSrc::TcpSrc(TcpLogger *logger, TrafficLogger *pktlogger, ofstream *_fstream_out,
-      | ^~~~~~
-tcp.h:589:9: warning: ‘TcpSrc::_flow_dst’ will be initialized after [-Wreorder]
-  589 |     int _flow_dst; // the receiver (sink) for this flow
-      |         ^~~~~~~~~
-tcp.h:488:12: warning:   ‘void (* TcpSrc::application_callback)(void*)’ [-Wreorder]
-  488 |     void (*application_callback)(void*);
-      |            ^~~~~~~~~~~~~~~~~~~~
-tcp.cpp:16:1: warning:   when initialized here [-Wreorder]
-   16 | TcpSrc::TcpSrc(TcpLogger *logger, TrafficLogger *pktlogger, ofstream *_fstream_out,
-      | ^~~~~~
-tcp.cpp: In member function ‘void TcpSrc::send_packets()’:
-tcp.cpp:564:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘uint64_t’ {aka ‘long unsigned int’} [-Wsign-compare]
-  564 |                 if (c > d)
-      |                     ~~^~~
 dyn_net_sch.cpp: In member function ‘void DemandRecorder::get_unsatisfied_demand(Matrix2D<double>&, int)’:
 dyn_net_sch.cpp:46:17: warning: unused variable ‘tcp_info’ [-Wunused-variable]
    46 |       tcp_info* tcp_info = i->second;    // 访问 tcp_info* 指针
@@ -164,6 +130,16 @@ dyn_net_sch.h:427:17: warning:   ‘FlatTopology* DynFlatScheduler::topo’ [-Wr
 dyn_net_sch.cpp:118:1: warning:   when initialized here [-Wreorder]
   118 | DynFlatScheduler::DynFlatScheduler(int nnodes, int degree, FlatTopology *topo,
       | ^~~~~~~~~~~~~~~~
+mixnet_topomanager.h: In constructor ‘MixnetTopoManager::MixnetTopoManager(Mixnet*, All2AllTrafficRecorder*, simtime_picosec, EventList&, bool, simtime_picosec)’:
+mixnet_topomanager.h:120:28: warning: ‘MixnetTopoManager::demandrecorder’ will be initialized after [-Wreorder]
+  120 |   All2AllTrafficRecorder * demandrecorder;
+      |                            ^~~~~~~~~~~~~~
+mixnet_topomanager.h:117:19: warning:   ‘simtime_picosec MixnetTopoManager::reconf_delay’ [-Wreorder]
+  117 |   simtime_picosec reconf_delay;
+      |                   ^~~~~~~~~~~~
+mixnet_topomanager.cpp:1088:1: warning:   when initialized here [-Wreorder]
+ 1088 | MixnetTopoManager::MixnetTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, bool periodic_reconf, simtime_picosec periodic_interval)
+      | ^~~~~~~~~~~~~~~~~
 dyn_net_sch.cpp: In member function ‘void DynFlatScheduler::set_all_tcp_pause()’:
 dyn_net_sch.cpp:461:28: warning: variable ‘i’ set but not used [-Wunused-but-set-variable]
   461 |   list<TcpSrc *>::iterator i = demandrecorder->rtx_scanner->_tcps.begin();
@@ -205,6 +181,30 @@ dyn_net_sch.cpp:1269:21: warning: comparison of integer expressions of different
 dyn_net_sch.cpp:1287:22: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {aka ‘long unsigned int’} [-Wsign-compare]
  1287 |     assert(allocated == (num_nodes - 1));
       |            ~~~~~~~~~~^~~~~~~~~~~~~~~~~~
+In file included from tcp.cpp:2:
+tcp.h: In constructor ‘TcpSrc::TcpSrc(TcpLogger*, TrafficLogger*, std::ofstream*, EventList&, int, int, void (*)(void*), void*)’:
+tcp.h:602:16: warning: ‘TcpSrc::_flow’ will be initialized after [-Wreorder]
+  602 |     PacketFlow _flow;
+      |                ^~~~~
+tcp.h:588:9: warning:   ‘int TcpSrc::_flow_src’ [-Wreorder]
+  588 |     int _flow_src; // the sender (source) for this flow
+      |         ^~~~~~~~~
+tcp.cpp:16:1: warning:   when initialized here [-Wreorder]
+   16 | TcpSrc::TcpSrc(TcpLogger *logger, TrafficLogger *pktlogger, ofstream *_fstream_out,
+      | ^~~~~~
+tcp.h:589:9: warning: ‘TcpSrc::_flow_dst’ will be initialized after [-Wreorder]
+  589 |     int _flow_dst; // the receiver (sink) for this flow
+      |         ^~~~~~~~~
+tcp.h:488:12: warning:   ‘void (* TcpSrc::application_callback)(void*)’ [-Wreorder]
+  488 |     void (*application_callback)(void*);
+      |            ^~~~~~~~~~~~~~~~~~~~
+tcp.cpp:16:1: warning:   when initialized here [-Wreorder]
+   16 | TcpSrc::TcpSrc(TcpLogger *logger, TrafficLogger *pktlogger, ofstream *_fstream_out,
+      | ^~~~~~
+tcp.cpp: In member function ‘void TcpSrc::send_packets()’:
+tcp.cpp:564:23: warning: comparison of integer expressions of different signedness: ‘int’ and ‘uint64_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+  564 |                 if (c > d)
+      |                     ~~^~~
 In file included from ffapp.cpp:12:
 ffapp.h: In constructor ‘FFApplication::FFApplication(Topology*, int, std::string, std::ofstream*, TcpRtxTimerScanner&, EventList&, FFAllReduceStrategy, int, std::ofstream*, MixnetTopoManager*)’:
 ffapp.h:537:12: warning: ‘FFApplication::n_finished_tasks’ will be initialized after [-Wreorder]
@@ -353,31 +353,31 @@ ffapp.cpp:951:1: warning:   when initialized here [-Wreorder]
   951 | FFTask::FFTask(FFApplication * ffapp, FFTask::FFTaskType type, uint64_t taskid, int counter, std::string info, int micro_batch_id, int layer_id, int target_micro_batch_id, int target_layer_id):
       | ^~~~~~
 ffapp.cpp: In member function ‘void FFRingAllreduce::start_flow(int, int)’:
-ffapp.cpp:1390:9: warning: unused variable ‘choose_ocs’ [-Wunused-variable]
- 1390 |     int choose_ocs=1;
+ffapp.cpp:1407:9: warning: unused variable ‘choose_ocs’ [-Wunused-variable]
+ 1407 |     int choose_ocs=1;
       |         ^~~~~~~~~~
-ffapp.cpp:1391:16: warning: unused variable ‘fstream_out_’ [-Wunused-variable]
- 1391 |     ofstream * fstream_out_;
+ffapp.cpp:1408:16: warning: unused variable ‘fstream_out_’ [-Wunused-variable]
+ 1408 |     ofstream * fstream_out_;
       |                ^~~~~~~~~~~~
 ffapp.cpp: In function ‘void ar_finish_newring(void*)’:
-ffapp.cpp:1627:32: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::vector<int> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
- 1627 |         if (ar->finished_rings == ar->jumps.size()) {
+ffapp.cpp:1644:32: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::vector<int> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+ 1644 |         if (ar->finished_rings == ar->jumps.size()) {
       |             ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
 ffapp.cpp: In member function ‘virtual void FFPSAllreduce::doNextEvent()’:
-ffapp.cpp:1668:31: warning: comparison of integer expressions of different signedness: ‘__gnu_cxx::__alloc_traits<std::allocator<long unsigned int>, long unsigned int>::value_type’ {aka ‘long unsigned int’} and ‘int’ [-Wsign-compare]
- 1668 |             if (node_group[i] != pserver)
+ffapp.cpp:1685:31: warning: comparison of integer expressions of different signedness: ‘__gnu_cxx::__alloc_traits<std::allocator<long unsigned int>, long unsigned int>::value_type’ {aka ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+ 1685 |             if (node_group[i] != pserver)
 ffapp.cpp: In function ‘void ar_finish_ps(void*)’:
-ffapp.cpp:1755:33: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__gnu_cxx::__alloc_traits<std::allocator<long unsigned int>, long unsigned int>::value_type’ {aka ‘long unsigned int’} [-Wsign-compare]
- 1755 |                 if (ar->pserver != ar->node_group[i])
+ffapp.cpp:1772:33: warning: comparison of integer expressions of different signedness: ‘int’ and ‘__gnu_cxx::__alloc_traits<std::allocator<long unsigned int>, long unsigned int>::value_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+ 1772 |                 if (ar->pserver != ar->node_group[i])
 ffapp.cpp: In member function ‘void FFAlltoAll::start_flow(int, int)’:
-ffapp.cpp:2240:9: warning: unused variable ‘is_ocs’ [-Wunused-variable]
- 2240 |     int is_ocs = 0;//elec by default
+ffapp.cpp:2257:9: warning: unused variable ‘is_ocs’ [-Wunused-variable]
+ 2257 |     int is_ocs = 0;//elec by default
       |         ^~~~~~
 ffapp.cpp: In member function ‘void FFP2P::start_flow(uint64_t, uint64_t)’:
-ffapp.cpp:2417:32: warning: comparison of integer expressions of different signedness: ‘__gnu_cxx::__alloc_traits<std::allocator<int>, int>::value_type’ {aka ‘int’} and ‘uint64_t’ {aka ‘long unsigned int’} [-Wsign-compare]
- 2417 |     assert(ffapp->gpus[src_gpu]==src_gpu && ffapp->gpus[dst_gpu]==dst_gpu);
-ffapp.cpp:2417:65: warning: comparison of integer expressions of different signedness: ‘__gnu_cxx::__alloc_traits<std::allocator<int>, int>::value_type’ {aka ‘int’} and ‘uint64_t’ {aka ‘long unsigned int’} [-Wsign-compare]
- 2417 |     assert(ffapp->gpus[src_gpu]==src_gpu && ffapp->gpus[dst_gpu]==dst_gpu);
+ffapp.cpp:2434:32: warning: comparison of integer expressions of different signedness: ‘__gnu_cxx::__alloc_traits<std::allocator<int>, int>::value_type’ {aka ‘int’} and ‘uint64_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+ 2434 |     assert(ffapp->gpus[src_gpu]==src_gpu && ffapp->gpus[dst_gpu]==dst_gpu);
+ffapp.cpp:2434:65: warning: comparison of integer expressions of different signedness: ‘__gnu_cxx::__alloc_traits<std::allocator<int>, int>::value_type’ {aka ‘int’} and ‘uint64_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+ 2434 |     assert(ffapp->gpus[src_gpu]==src_gpu && ffapp->gpus[dst_gpu]==dst_gpu);
 In file included from ndp.h:14:
 In member function ‘uint32_t Packet::flow_id() const’,
     inlined from ‘void NdpSrc::send_packet(NdpPull::seq_t)’ at ndp.cpp:674:32:
@@ -414,11 +414,6 @@ ndp.cpp:1172:14: note: ‘nack’ was declared here
 ar: `u' modifier ignored since `D' is the default (see `U')
 ar: creating libhtsim.a
 In file included from /usr/include/c++/13/backward/strstream:50,
-                 from main_tcp_fattree.cpp:4:
-/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
-   32 | #warning \
-      |  ^~~~~~~
-In file included from /usr/include/c++/13/backward/strstream:50,
                  from main_tcp_fc.cpp:4:
 /usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
    32 | #warning \
@@ -429,7 +424,7 @@ In file included from /usr/include/c++/13/backward/strstream:50,
    32 | #warning \
       |  ^~~~~~~
 In file included from /usr/include/c++/13/backward/strstream:50,
-                 from main_tcp_os_fattree.cpp:4:
+                 from main_tcp_fattree.cpp:4:
 /usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
    32 | #warning \
       |  ^~~~~~~
@@ -444,6 +439,16 @@ In file included from /usr/include/c++/13/backward/strstream:50,
    32 | #warning \
       |  ^~~~~~~
 In file included from /usr/include/c++/13/backward/strstream:50,
+                 from main_tcp_aggosft.cpp:4:
+/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
+   32 | #warning \
+      |  ^~~~~~~
+In file included from /usr/include/c++/13/backward/strstream:50,
+                 from main_tcp_os_fattree.cpp:4:
+/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
+   32 | #warning \
+      |  ^~~~~~~
+In file included from /usr/include/c++/13/backward/strstream:50,
                  from main_tcp_flat.cpp:4:
 /usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
    32 | #warning \
@@ -454,22 +459,7 @@ In file included from /usr/include/c++/13/backward/strstream:50,
    32 | #warning \
       |  ^~~~~~~
 In file included from /usr/include/c++/13/backward/strstream:50,
-                 from main_tcp_aggosft.cpp:4:
-/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
-   32 | #warning \
-      |  ^~~~~~~
-In file included from /usr/include/c++/13/backward/strstream:50,
-                 from agg_os_fattree.cpp:6:
-/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
-   32 | #warning \
-      |  ^~~~~~~
-In file included from /usr/include/c++/13/backward/strstream:50,
                  from mixnet.cpp:7:
-/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
-   32 | #warning \
-      |  ^~~~~~~
-In file included from /usr/include/c++/13/backward/strstream:50,
-                 from flat_topology.cpp:7:
 /usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
    32 | #warning \
       |  ^~~~~~~
@@ -479,23 +469,25 @@ In file included from /usr/include/c++/13/backward/strstream:50,
    32 | #warning \
       |  ^~~~~~~
 In file included from /usr/include/c++/13/backward/strstream:50,
+                 from os_fattree.cpp:6:
+/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
+   32 | #warning \
+      |  ^~~~~~~
+In file included from /usr/include/c++/13/backward/strstream:50,
                  from fat_tree_topology.cpp:6:
 /usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
    32 | #warning \
       |  ^~~~~~~
 In file included from /usr/include/c++/13/backward/strstream:50,
-                 from os_fattree.cpp:6:
+                 from flat_topology.cpp:7:
 /usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
    32 | #warning \
       |  ^~~~~~~
-agg_os_fattree.cpp: In member function ‘void AggOverSubscribedFatTree::init_network()’:
-agg_os_fattree.cpp:272:9: warning: unused variable ‘pod’ [-Wunused-variable]
-  272 |     int pod = j / (Nup / K);        // get current pod
-      |         ^~~
-flat_topology.cpp: In member function ‘void FlatTopology::load_topology_flatbuf(const std::string&)’:
-flat_topology.cpp:116:8: warning: unused variable ‘fbuf_tg’ [-Wunused-variable]
-  116 |   auto fbuf_tg = flatbuffers::GetRoot<FlatBufTaskGraph::TaskGraph>(buffer.c_str());
-      |        ^~~~~~~
+In file included from /usr/include/c++/13/backward/strstream:50,
+                 from agg_os_fattree.cpp:6:
+/usr/include/c++/13/backward/backward_warning.h:32:2: warning: #warning This file includes at least one deprecated or antiquated header which may be removed without further notice at a future date. Please use a non-deprecated interface with equivalent functionality instead. For a listing of replacement headers and interfaces, consult the file backward_warning.h. To disable this warning use -Wno-deprecated. [-Wcpp]
+   32 | #warning \
+      |  ^~~~~~~
 mixnet.cpp: In member function ‘virtual std::vector<const Route*>* Mixnet::get_paths(int, int)’:
 mixnet.cpp:194:12: warning: unused variable ‘routeout’ [-Wunused-variable]
   194 |   route_t *routeout, *routeback;
@@ -538,6 +530,10 @@ main_tcp_multijob_fattree.cpp:327:21: warning: comparison of integer expressions
 main_tcp_multijob_fattree.cpp:375:21: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::__cxx11::basic_string<char> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
   375 |   for (int i = 0; i < flowfile_arr.size(); i++) {
       |                   ~~^~~~~~~~~~~~~~~~~~~~~
+main_tcp_multijob_aggos_fattree.cpp: In function ‘int main(int, char**)’:
+main_tcp_multijob_aggos_fattree.cpp:351:21: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::__cxx11::basic_string<char> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
+  351 |   for (int i = 0; i < flowfile_arr.size(); i++) {
+      |                   ~~^~~~~~~~~~~~~~~~~~~~~
 main_tcp_multijob_fattree.cpp:113:7: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
   113 |   int algo = UNCOUPLED;
       |       ^~~~
@@ -547,20 +543,6 @@ main_tcp_multijob_fattree.cpp:129:10: warning: variable ‘utiltime’ set but n
 main_tcp_multijob_fattree.cpp:343:7: warning: unused variable ‘pktsize’ [-Wunused-variable]
   343 |   int pktsize = Packet::data_packet_size();
       |       ^~~~~~~
-main_tcp_fc.cpp: In function ‘int main(int, char**)’:
-main_tcp_fc.cpp:108:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
-  108 |     int algo = UNCOUPLED;
-      |         ^~~~
-main_tcp_fc.cpp:122:12: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
-  122 |     double utiltime=.01; // seconds
-      |            ^~~~~~~~
-main_tcp_fc.cpp:286:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
-  286 |     int pktsize = Packet::data_packet_size();
-      |         ^~~~~~~
-main_tcp_multijob_aggos_fattree.cpp: In function ‘int main(int, char**)’:
-main_tcp_multijob_aggos_fattree.cpp:351:21: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::__cxx11::basic_string<char> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
-  351 |   for (int i = 0; i < flowfile_arr.size(); i++) {
-      |                   ~~^~~~~~~~~~~~~~~~~~~~~
 main_tcp_multijob_aggos_fattree.cpp:399:21: warning: comparison of integer expressions of different signedness: ‘int’ and ‘std::vector<std::__cxx11::basic_string<char> >::size_type’ {aka ‘long unsigned int’} [-Wsign-compare]
   399 |   for (int i = 0; i < flowfile_arr.size(); i++) {
       |                   ~~^~~~~~~~~~~~~~~~~~~~~
@@ -573,6 +555,16 @@ main_tcp_multijob_aggos_fattree.cpp:133:10: warning: variable ‘utiltime’ set
 main_tcp_multijob_aggos_fattree.cpp:367:7: warning: unused variable ‘pktsize’ [-Wunused-variable]
   367 |   int pktsize = Packet::data_packet_size();
       |       ^~~~~~~
+main_tcp_fattree.cpp: In function ‘int main(int, char**)’:
+main_tcp_fattree.cpp:120:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
+  120 |     int algo = UNCOUPLED;
+      |         ^~~~
+main_tcp_fattree.cpp:136:12: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
+  136 |     double utiltime = .01; // seconds
+      |            ^~~~~~~~
+main_tcp_fattree.cpp:332:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
+  332 |     int pktsize = Packet::data_packet_size();
+      |         ^~~~~~~
 main_tcp_mixnet.cpp: In function ‘int main(int, char**)’:
 main_tcp_mixnet.cpp:128:7: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
   128 |   int algo = UNCOUPLED;
@@ -591,6 +583,40 @@ os_fattree.cpp: In member function ‘virtual std::vector<const Route*>* OverSub
 os_fattree.cpp:350:22: warning: unused variable ‘simplequeuelogger’ [-Wunused-variable]
   350 |   QueueLoggerSimple *simplequeuelogger = new QueueLoggerSimple();
       |                      ^~~~~~~~~~~~~~~~~
+agg_os_fattree.cpp: In member function ‘void AggOverSubscribedFatTree::init_network()’:
+agg_os_fattree.cpp:272:9: warning: unused variable ‘pod’ [-Wunused-variable]
+  272 |     int pod = j / (Nup / K);        // get current pod
+      |         ^~~
+main_tcp_os_fattree.cpp: In function ‘int main(int, char**)’:
+main_tcp_os_fattree.cpp:110:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
+  110 |     int algo = UNCOUPLED;
+      |         ^~~~
+main_tcp_os_fattree.cpp:125:12: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
+  125 |     double utiltime=.01; // seconds
+      |            ^~~~~~~~
+main_tcp_os_fattree.cpp:306:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
+  306 |     int pktsize = Packet::data_packet_size();
+      |         ^~~~~~~
+flat_topology.cpp: In member function ‘void FlatTopology::load_topology_flatbuf(const std::string&)’:
+flat_topology.cpp:116:8: warning: unused variable ‘fbuf_tg’ [-Wunused-variable]
+  116 |   auto fbuf_tg = flatbuffers::GetRoot<FlatBufTaskGraph::TaskGraph>(buffer.c_str());
+      |        ^~~~~~~
+main_tcp_fc.cpp: In function ‘int main(int, char**)’:
+main_tcp_fc.cpp:108:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
+  108 |     int algo = UNCOUPLED;
+      |         ^~~~
+main_tcp_fc.cpp:122:12: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
+  122 |     double utiltime=.01; // seconds
+      |            ^~~~~~~~
+main_tcp_fc.cpp:286:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
+  286 |     int pktsize = Packet::data_packet_size();
+      |         ^~~~~~~
+main_tcp_fattree.cpp:243:25: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
+  243 |     eventlist.setEndtime(timeFromSec(simtime));
+      |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+main_tcp_fattree.cpp:135:12: note: ‘simtime’ was declared here
+  135 |     double simtime;        // seconds
+      |            ^~~~~~~
 main_tcp_aggosft.cpp: In function ‘int main(int, char**)’:
 main_tcp_aggosft.cpp:109:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
   109 |     int algo = UNCOUPLED;
@@ -601,32 +627,6 @@ main_tcp_aggosft.cpp:124:12: warning: variable ‘utiltime’ set but not used [
 main_tcp_aggosft.cpp:309:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
   309 |     int pktsize = Packet::data_packet_size();
       |         ^~~~~~~
-main_tcp_fc.cpp:196:25: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
-  196 |     eventlist.setEndtime(timeFromSec(simtime));
-      |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-main_tcp_fc.cpp:121:12: note: ‘simtime’ was declared here
-  121 |     double simtime; // seconds
-      |            ^~~~~~~
-main_tcp_fattree.cpp: In function ‘int main(int, char**)’:
-main_tcp_fattree.cpp:120:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
-  120 |     int algo = UNCOUPLED;
-      |         ^~~~
-main_tcp_fattree.cpp:136:12: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
-  136 |     double utiltime = .01; // seconds
-      |            ^~~~~~~~
-main_tcp_fattree.cpp:332:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
-  332 |     int pktsize = Packet::data_packet_size();
-      |         ^~~~~~~
-main_tcp_dyn_flat.cpp: In function ‘int main(int, char**)’:
-main_tcp_dyn_flat.cpp:114:7: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
-  114 |   int algo = UNCOUPLED;
-      |       ^~~~
-main_tcp_dyn_flat.cpp:130:10: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
-  130 |   double utiltime = .01; // seconds
-      |          ^~~~~~~~
-main_tcp_dyn_flat.cpp:331:7: warning: unused variable ‘pktsize’ [-Wunused-variable]
-  331 |   int pktsize = Packet::data_packet_size();
-      |       ^~~~~~~
 main_tcp_mixnet.cpp:329:23: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
   329 |   eventlist.setEndtime(timeFromSec(simtime));
       |   ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
@@ -657,6 +657,16 @@ main_tcp_mixnet.cpp:412:33: warning: ‘ep_degree’ may be used uninitialized [
 main_tcp_mixnet.cpp:149:7: note: ‘ep_degree’ was declared here
   149 |   int ep_degree;
       |       ^~~~~~~~~
+main_tcp_dyn_flat.cpp: In function ‘int main(int, char**)’:
+main_tcp_dyn_flat.cpp:114:7: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
+  114 |   int algo = UNCOUPLED;
+      |       ^~~~
+main_tcp_dyn_flat.cpp:130:10: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
+  130 |   double utiltime = .01; // seconds
+      |          ^~~~~~~~
+main_tcp_dyn_flat.cpp:331:7: warning: unused variable ‘pktsize’ [-Wunused-variable]
+  331 |   int pktsize = Packet::data_packet_size();
+      |       ^~~~~~~
 main_tcp_flat.cpp: In function ‘int main(int, char**)’:
 main_tcp_flat.cpp:111:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
   111 |     int algo = UNCOUPLED;
@@ -666,16 +676,6 @@ main_tcp_flat.cpp:126:12: warning: variable ‘utiltime’ set but not used [-Wu
       |            ^~~~~~~~
 main_tcp_flat.cpp:331:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
   331 |     int pktsize = Packet::data_packet_size();
-      |         ^~~~~~~
-main_tcp_os_fattree.cpp: In function ‘int main(int, char**)’:
-main_tcp_os_fattree.cpp:110:9: warning: variable ‘algo’ set but not used [-Wunused-but-set-variable]
-  110 |     int algo = UNCOUPLED;
-      |         ^~~~
-main_tcp_os_fattree.cpp:125:12: warning: variable ‘utiltime’ set but not used [-Wunused-but-set-variable]
-  125 |     double utiltime=.01; // seconds
-      |            ^~~~~~~~
-main_tcp_os_fattree.cpp:306:9: warning: unused variable ‘pktsize’ [-Wunused-variable]
-  306 |     int pktsize = Packet::data_packet_size();
       |         ^~~~~~~
 main_tcp_multijob_fattree.cpp:230:23: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
   230 |   eventlist.setEndtime(timeFromSec(simtime));
@@ -694,6 +694,36 @@ main_tcp_multijob_aggos_fattree.cpp:254:23: warning: ‘simtime’ may be used u
       |   ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
 main_tcp_multijob_aggos_fattree.cpp:132:10: note: ‘simtime’ was declared here
   132 |   double simtime;        // seconds
+      |          ^~~~~~~
+main_tcp_os_fattree.cpp:293:122: warning: ‘k’ may be used uninitialized [-Wmaybe-uninitialized]
+  293 |     OverSubscribedFatTree* top = new OverSubscribedFatTree(k, nlp, queuesize, nullptr /* &logfile */, &eventlist, ff, ECN);
+      |                                                                                                                          ^
+main_tcp_os_fattree.cpp:114:9: note: ‘k’ was declared here
+  114 |     int k;
+      |         ^
+main_tcp_os_fattree.cpp:293:122: warning: ‘nlp’ may be used uninitialized [-Wmaybe-uninitialized]
+  293 |     OverSubscribedFatTree* top = new OverSubscribedFatTree(k, nlp, queuesize, nullptr /* &logfile */, &eventlist, ff, ECN);
+      |                                                                                                                          ^
+main_tcp_os_fattree.cpp:115:9: note: ‘nlp’ was declared here
+  115 |     int nlp;
+      |         ^~~
+main_tcp_os_fattree.cpp:213:25: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
+  213 |     eventlist.setEndtime(timeFromSec(simtime));
+      |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+main_tcp_os_fattree.cpp:124:12: note: ‘simtime’ was declared here
+  124 |     double simtime; // seconds
+      |            ^~~~~~~
+main_tcp_fc.cpp:196:25: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
+  196 |     eventlist.setEndtime(timeFromSec(simtime));
+      |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+main_tcp_fc.cpp:121:12: note: ‘simtime’ was declared here
+  121 |     double simtime; // seconds
+      |            ^~~~~~~
+main_tcp_dyn_flat.cpp:249:23: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
+  249 |   eventlist.setEndtime(timeFromSec(simtime));
+      |   ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+main_tcp_dyn_flat.cpp:129:10: note: ‘simtime’ was declared here
+  129 |   double simtime;        // seconds
       |          ^~~~~~~
 main_tcp_aggosft.cpp:297:128: warning: ‘k’ may be used uninitialized [-Wmaybe-uninitialized]
   297 |     AggOverSubscribedFatTree* top = new AggOverSubscribedFatTree(k, nup, queuesize, nullptr /* &logfile */, &eventlist, ff, ECN);
@@ -718,34 +748,4 @@ main_tcp_flat.cpp:233:25: warning: ‘simtime’ may be used uninitialized [-Wma
       |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
 main_tcp_flat.cpp:125:12: note: ‘simtime’ was declared here
   125 |     double simtime;        // seconds
-      |            ^~~~~~~
-main_tcp_fattree.cpp:243:25: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
-  243 |     eventlist.setEndtime(timeFromSec(simtime));
-      |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-main_tcp_fattree.cpp:135:12: note: ‘simtime’ was declared here
-  135 |     double simtime;        // seconds
-      |            ^~~~~~~
-main_tcp_dyn_flat.cpp:249:23: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
-  249 |   eventlist.setEndtime(timeFromSec(simtime));
-      |   ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-main_tcp_dyn_flat.cpp:129:10: note: ‘simtime’ was declared here
-  129 |   double simtime;        // seconds
-      |          ^~~~~~~
-main_tcp_os_fattree.cpp:293:122: warning: ‘k’ may be used uninitialized [-Wmaybe-uninitialized]
-  293 |     OverSubscribedFatTree* top = new OverSubscribedFatTree(k, nlp, queuesize, nullptr /* &logfile */, &eventlist, ff, ECN);
-      |                                                                                                                          ^
-main_tcp_os_fattree.cpp:114:9: note: ‘k’ was declared here
-  114 |     int k;
-      |         ^
-main_tcp_os_fattree.cpp:293:122: warning: ‘nlp’ may be used uninitialized [-Wmaybe-uninitialized]
-  293 |     OverSubscribedFatTree* top = new OverSubscribedFatTree(k, nlp, queuesize, nullptr /* &logfile */, &eventlist, ff, ECN);
-      |                                                                                                                          ^
-main_tcp_os_fattree.cpp:115:9: note: ‘nlp’ was declared here
-  115 |     int nlp;
-      |         ^~~
-main_tcp_os_fattree.cpp:213:25: warning: ‘simtime’ may be used uninitialized [-Wmaybe-uninitialized]
-  213 |     eventlist.setEndtime(timeFromSec(simtime));
-      |     ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-main_tcp_os_fattree.cpp:124:12: note: ‘simtime’ was declared here
-  124 |     double simtime; // seconds
       |            ^~~~~~~
