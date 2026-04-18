@@ -22,3 +22,7 @@ notes.txt
 src/clos/libhtsim.a
 
 logs/
+topo_gen/
+mixnet_scripts/collect_results.sh
+mixnet_scripts/run_experiments.sh
+mixnet_scripts/inspect_run.sh

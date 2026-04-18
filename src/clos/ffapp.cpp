@@ -1109,6 +1109,7 @@ void FFTask::cleanup() {
                     // reset per-layer periodic reconf state
                     ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
                     ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_idx =0;
+                    ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_ready=0; //Can change this to conditional if the matrix change
                     //ffapp->topomanager->demandrecorder->dump_all_traffic_matrices(layer_id, region_id, all2all_task->all2all_traffic_matrix);        //Deeksha: For debugging purpose
                     ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
                     //Performing append (as above ) with normalized and scaled traffic matrix inside update traffic matrix function 
@@ -1145,7 +1146,7 @@ void FFTask::cleanup() {
                     ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_idx = 0;
                     ffapp->topomanager->regional_topo_managers[region_id]->reverse=1;
                     ffapp->topomanager->regional_topo_managers[region_id]->activeAlltoAll=1;
-
+                     ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_ready=0; //Can change this to conditional if the matrix change
                 assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));
                 eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
                     }
@@ -2450,21 +2451,38 @@ void finish_alltoall(void * a2ainfo) {
     if (a2a_task->curr_round == a2a_task->total_rounds) {
         std::cerr << "finish_alltoall_task "<< " total rounds "<< a2a_task->total_rounds << " intra node routing num "<< a2a->intra_node_routing << std::endl;
         a2a_task->finish_time = max(a2a_task->finish_time, a2a_task->eventlist().now());
-        a2a_task->run_time = a2a_task->finish_time - a2a_task->start_time;
-        std::cerr << "alltoall timing task_id " << a2a_task->taskid
+        a2a_task->run_time = a2a_task->finish_time - a2a_task->start_time;\
+        if(a2a_task->info.find("GROUP_BY forward") != std::string::npos) {
+        std::cerr << "group by alltoall timing task_id " << a2a_task->taskid
                   << " layer " << a2a_task->layer_id
+                  << " region " << (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size
                   << " micro_batch " << a2a_task->micro_batch_id
                   << " start " << a2a_task->start_time
                   << " finish " << a2a_task->finish_time
-                  << " duration " << a2a_task->run_time << std::endl;
+                  << " duration " << a2a_task->run_time << std::endl;}
+         else if(a2a_task->info.find("AGGREGATE forward") != std::string::npos) {
+                    std::cerr << "aggregate alltoall timing task_id " << a2a_task->taskid
+                  << " layer " << a2a_task->layer_id
+                  << " region " << (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size
+                  << " micro_batch " << a2a_task->micro_batch_id
+                  << " start " << a2a_task->start_time
+                  << " finish " << a2a_task->finish_time
+                  << " duration " << a2a_task->run_time << std::endl;}
+         else{std::cerr << " alltoall timing task_id " << a2a_task->taskid
+                  << " layer " << a2a_task->layer_id
+                  << " region " << (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size
+                  << " micro_batch " << a2a_task->micro_batch_id
+                  << " start " << a2a_task->start_time
+                  << " finish " << a2a_task->finish_time
+                  << " duration " << a2a_task->run_time << std::endl;}
         // vamsi: toggle the direction, so that the topology is reverse for next phase of all to all
         int region_id = (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size;
         a2a_task->ffapp->topomanager->regional_topo_managers[region_id]->activeAlltoAll=0;
-        a2a_task->ffapp->topomanager ? a2a_task->ffapp->topomanager->transpose(region_id) : void();
+        //a2a_task->ffapp->topomanager ? a2a_task->ffapp->topomanager->transpose(region_id) : void();
         a2a_task->cleanup();
-        // if (FFApplication::debug_exit==a2a_task->layer_id) {
-        //     exit(0);
-        // }
+        if (FFApplication::debug_exit==a2a_task->layer_id) {
+            exit(0);
+        }
     }
 }
 
