@@ -192,7 +192,9 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
   
   
   route_t *routeout, *routeback;
-  if(conn[src][dest]>0) { //allocate ocs path
+  // if(conn[src][dest]>0) { //allocate ocs path
+  // vamsi: Always allocate the OCS path, this is periodic reconfiguration
+  if (1){
     vector<const Route *> *paths = new vector<const Route *>();
 
     route_t *routeout, *routeback;
@@ -215,7 +217,8 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
         if(queues[route[i]][route[i + 1]]->_bitrate==0) {
           cerr << "route " << i << " " << route[i] << "->" << route[i + 1] << "Queue" << queues[route[i]][route[i + 1]]->_bitrate << endl;
         }
-        assert(queues[route[i]][route[i + 1]]->_bitrate!=0);
+        // vamsi: no need for this assert, paths are available over time.
+        // assert(queues[route[i]][route[i + 1]]->_bitrate!=0);
         routeout->push_back(queues[route[i]][route[i + 1]]);
         routeout->push_back(pipes[route[i]][route[i + 1]]);
       }

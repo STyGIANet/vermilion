@@ -153,8 +153,9 @@ void TcpSrc::set_app_limit(int pktps)
 
 void TcpSrc::startflow()
 {
-	_cwnd = 100 * _mss;
-	// _cwnd = 1 << 23;
+	// _cwnd = 100 * _mss;
+	// vamsi: Let the tcp send everything out at one go, and let the topology deal with it.
+	_cwnd = 1 << 23;
 	_unacked = _cwnd;
 	_established = false;
 

@@ -1141,7 +1141,7 @@ void FFTask::start_flow() {
     TcpSink* flowSnk = new TcpSink();
     flowSrc->set_flowsize(xfersize); // bytes
     flowSrc->set_ssthresh(ffapp->ssthresh*Packet::data_packet_size());
-    flowSrc->_rto = timeFromMs(10);
+    flowSrc->_rto = timeFromMs(1000);
     
     ffapp->tcpRtxScanner.registerTcp(*flowSrc);
 

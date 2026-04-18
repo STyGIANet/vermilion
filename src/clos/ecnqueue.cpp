@@ -90,8 +90,18 @@ void ECNQueue::set_regional_topo_manager(RegionalTopoManager * regional_topo_man
 
 void ECNQueue::completeService()
 {
+
+	// vamsi: if we are paused, we should not be sending packets!
+	if (_state_send == LosslessQueue::PAUSED){
+		return;
+	}
+
 	/* dequeue the packet */
-	assert(!_enqueued.empty());
+	// assert(!_enqueued.empty());
+	// vamsi: too strong assert.
+	if (_enqueued.empty()){
+		return;
+	}
 	Packet *pkt = _enqueued.back();
 	_enqueued.pop_back();
 

@@ -345,10 +345,22 @@ void RegionalTopoManager::finish_reconf()
       Queue *q = topo->queues[i][j];
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
       // std::cerr << "queue " << i << ", " << j << " br " << eq->_bitrate << " ps per byte " << eq->_ps_per_byte << " size " << eq->_enqueued.size() << std::endl;
-      assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
+      // vamsi: we can leave the queues non-empty, they just need to be paused, and resume when they have a connection
+      // assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
       // if (eq->_bitrate > 0)
       {
-        eq->_state_send = LosslessQueue::READY;
+        // Only resume the queues that have a connection available
+        // eq->_state_send = LosslessQueue::READY;
+        if (topo->conn[i][j] > 0)
+        {
+          eq->_state_send = LosslessQueue::READY;
+          if (!eq->_enqueued.empty())
+          {
+            eq->beginService();
+            // std::cerr << "queue " << i << ", " << j << " br " << eq->_bitrate << " ps per byte " << eq->_ps_per_byte << " size " << eq->_enqueued.size() << std::endl;
+            // std::cerr << "\t starting... " << std::endl;
+          }
+        }
         // if (!eq->_enqueued.empty())
         // {
         //   eq->beginService();
@@ -389,23 +401,28 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
         continue;
       Queue *q = topo->queues[i][j];
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
-      if(eq->queuesize() > 0)
-      {
-        std::cout << "Queue" << eq->_enqueued.size()
-                  << " state=" << eq->_state_send << std::endl;
-        // Allow existing backlog to drain; flows are paused so no new packets enter
-        // Treat both PAUSED and PAUSE_RECEIVED as needing an explicit resume. // vamsi
-        if (eq->_state_send == LosslessQueue::PAUSED ||
-            eq->_state_send == LosslessQueue::PAUSE_RECEIVED) {
-          eq->_state_send = LosslessQueue::READY;
-          if (!eq->_enqueued.empty()) {
-            eq->beginService();
-          }
-        }
 
-        non_empty_queues += eq->_enqueued.size();
-        // std::cerr << i << ", " << j << " qsz " << eq->_enqueued.size() << " bw " << eq->_bitrate << std::endl;
-      }
+      // vamsi: We just need to pause the queue and allow pipes to drain (inflight bytes on the wire)
+
+      eq->_state_send = LosslessQueue::PAUSED;
+
+      // if(eq->queuesize() > 0)
+      // {
+      //   std::cout << "Queue" << eq->_enqueued.size()
+      //             << " state=" << eq->_state_send << std::endl;
+      //   // Allow existing backlog to drain; flows are paused so no new packets enter
+      //   // Treat both PAUSED and PAUSE_RECEIVED as needing an explicit resume. // vamsi
+      //   if (eq->_state_send == LosslessQueue::PAUSED ||
+      //       eq->_state_send == LosslessQueue::PAUSE_RECEIVED) {
+      //     eq->_state_send = LosslessQueue::READY;
+      //     if (!eq->_enqueued.empty()) {
+      //       eq->beginService();
+      //     }
+      //   }
+
+      //   non_empty_queues += eq->_enqueued.size();
+      //   // std::cerr << i << ", " << j << " qsz " << eq->_enqueued.size() << " bw " << eq->_bitrate << std::endl;
+      // }
       
       Pipe *p = topo->pipes[i][j];
       if (!p->_inflight.empty()){
@@ -510,22 +527,24 @@ void RegionalTopoManager::update_regional_route()
         tcpsrc->is_elec = false; // Deeksha: Trying to pause all flows which do not have direct connect for now, to avoid the complexity of route update for elec flows, to do: update route for elec flows as well
       }
       assert(tcpsrc->is_all2all);
-      Route *routeout, *routein;
-      int choice;
-      vector<const Route *> *srcpaths = topo->get_paths(tcpsrc->_flow_src, tcpsrc->_flow_dst);
-      // choice = rand()%srcpaths->size(); // comment this out if we want to use the first path
-      choice = 0; // Deeksha: Choosing the first path
-      routeout = new Route(*(srcpaths->at(choice)));
-      routeout->push_back(tcpsrc->_sink);
-      vector<const Route *> *dstpaths = topo->get_paths(tcpsrc->_flow_dst, tcpsrc->_flow_src);
-      // choice = rand()%dstpaths->size(); // comment this out if we want to use the first path
-      choice = 0; // Deeksha: Choosing the first path
-      routein = new Route(*(dstpaths->at(choice)));
-      routein->push_back(tcpsrc);
-      tcpsrc->update_route(routeout, routein);
 
-      delete srcpaths;
-      delete dstpaths;
+      // vamsi: We don't need to update routes with periodic reconfiguration: Assumption is that a path is available over time. We just need to fix direct paths, and use when available
+      // Route *routeout, *routein;
+      // int choice;
+      // vector<const Route *> *srcpaths = topo->get_paths(tcpsrc->_flow_src, tcpsrc->_flow_dst);
+      // // choice = rand()%srcpaths->size(); // comment this out if we want to use the first path
+      // choice = 0; // Deeksha: Choosing the first path
+      // routeout = new Route(*(srcpaths->at(choice)));
+      // routeout->push_back(tcpsrc->_sink);
+      // vector<const Route *> *dstpaths = topo->get_paths(tcpsrc->_flow_dst, tcpsrc->_flow_src);
+      // // choice = rand()%dstpaths->size(); // comment this out if we want to use the first path
+      // choice = 0; // Deeksha: Choosing the first path
+      // routein = new Route(*(dstpaths->at(choice)));
+      // routein->push_back(tcpsrc);
+      // tcpsrc->update_route(routeout, routein);
+
+      // delete srcpaths;
+      // delete dstpaths;
     }
     i++;
   }
@@ -630,73 +649,182 @@ void RegionalTopoManager::prepare_conn_cycle()
   }
 
   conn_cycle.clear();
-  std::vector<std::vector<std::vector<int>>> conn(6,
+  // vamsi: period is k * n/u
+  int k = 5;
+  int connsize = k * region_size/alpha;
+  std::vector<std::vector<std::vector<int>>> conn(connsize,
     std::vector<std::vector<int>>(region_size,
         std::vector<int>(region_size, 0)));
 
-  // // conn = {
-  // //   {// conn[5]
-  // //    {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1}
-  // //    },
-  // //   {  // conn[5]
-  // //    {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1}
-  // //    },
-  // //    {// conn[5]
-  // //    {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1}
-  // //    },
-  // //   {  // conn[5]
-  // //    {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1}
-  // //    },
+conn={
+{
+{0,1,1,0,0,0,0,2},
+{1,0,1,1,0,0,1,0},
+{1,0,0,1,1,1,0,0},
+{0,1,1,0,0,1,1,0},
+{1,0,0,1,0,1,0,1},
+{0,1,1,0,1,0,1,0},
+{1,0,0,1,0,1,0,1},
+{0,1,0,0,2,0,1,0}
+},
+{
+{0,1,1,0,1,1,0,0},
+{1,0,0,0,1,1,1,0},
+{1,0,0,1,1,0,1,0},
+{1,0,1,0,0,1,0,1},
+{0,1,1,0,0,1,0,0},
+{0,1,1,1,1,0,0,0},
+{0,0,0,2,0,0,0,2},
+{1,1,0,0,0,0,2,0}
+},
+{
+{0,1,0,1,0,2,0,0},
+{1,0,1,0,1,0,1,0},
+{0,1,0,1,1,0,1,0},
+{2,0,1,0,0,0,0,1},
+{0,0,1,0,0,1,0,1},
+{0,1,1,0,1,0,1,0},
+{0,0,0,1,0,1,0,1},
+{1,1,0,0,1,0,1,0}
+},
+{
+{0,1,0,1,0,2,0,0},
+{1,0,1,0,0,0,0,2},
+{0,1,0,1,1,0,1,0},
+{2,0,1,0,0,0,0,0},
+{1,0,1,0,0,1,0,1},
+{0,1,0,0,1,0,1,0},
+{0,0,1,1,0,1,0,1},
+{0,1,0,0,2,0,1,0}
+},
+{
+{0,1,0,1,0,1,1,0},
+{1,0,1,0,0,1,0,1},
+{0,1,0,1,1,0,1,0},
+{0,0,1,0,1,0,0,1},
+{2,0,1,0,0,0,1,0},
+{0,0,0,1,0,0,1,1},
+{0,1,1,0,1,1,0,0},
+{1,1,0,0,1,1,0,0}
+},
+{
+{0,1,0,1,0,1,1,0},
+{0,0,1,0,1,0,0,1},
+{0,0,0,0,1,0,0,3},
+{1,0,0,0,1,1,0,0},
+{1,1,1,1,0,0,0,0},
+{0,0,0,0,0,0,3,0},
+{1,1,1,0,0,1,0,0},
+{1,0,1,2,0,0,0,0}
+},
+{
+{0,0,1,0,1,1,0,1},
+{0,0,1,1,0,0,0,1},
+{1,0,0,0,0,1,1,0},
+{0,1,0,0,1,0,0,1},
+{1,1,1,0,0,0,1,0},
+{1,0,0,1,0,0,0,1},
+{1,1,0,0,1,0,0,0},
+{0,0,0,1,0,1,1,0}
+},
+{
+{0,0,1,0,1,0,0,2},
+{0,0,1,1,1,0,0,0},
+{1,0,0,0,0,1,1,0},
+{0,1,0,0,0,1,1,0},
+{0,1,1,0,0,0,1,0},
+{2,0,0,0,0,0,0,2},
+{1,1,0,0,1,0,0,0},
+{0,0,0,2,0,1,0,0}
+},
+{
+{0,0,1,0,1,0,0,2},
+{0,0,1,1,1,0,0,0},
+{1,0,0,0,0,1,1,0},
+{0,1,0,0,0,1,1,0},
+{0,1,0,1,0,0,1,0},
+{1,0,1,0,0,0,0,2},
+{1,1,0,0,1,0,0,0},
+{1,0,0,1,0,1,0,0}
+},
+{
+{0,0,1,0,0,1,0,1},
+{0,0,1,1,1,0,0,0},
+{1,0,0,0,0,1,0,1},
+{0,1,0,0,0,0,2,0},
+{1,0,0,1,0,0,1,0},
+{0,1,1,0,0,0,0,1},
+{1,0,0,1,0,1,0,0},
+{0,1,0,0,2,0,0,0}
+}
+};
+
+
+
+
+  // conn = {
+  //   {// conn[5]
+  //    {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1}
+  //    },
+  //   {  // conn[5]
+  //    {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1}
+  //    },
+  //    {// conn[5]
+  //    {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1}
+  //    },
+  //   {  // conn[5]
+  //    {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1}
+  //    },
      
-  // //   { // conn[5]
-  // //    {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1}
-  // //    },
-  // //   { // conn[5]
-  // //    {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1},
-  // //      {1,1,1,1,1,1,1,1},
-  // //     {1,1,1,1,1,1,1,1}
-  // //    } 
-  // //   };
+  //   { // conn[5]
+  //    {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1}
+  //    },
+  //   { // conn[5]
+  //    {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1},
+  //      {1,1,1,1,1,1,1,1},
+  //     {1,1,1,1,1,1,1,1}
+  //    } 
+  //   };
 
   // conn = {
   //   { // conn[0]
@@ -830,68 +958,68 @@ void RegionalTopoManager::prepare_conn_cycle()
     
   // };
 //Deeksha: This is for reverse
-  conn = {
-    { // conn[0]
-      {1,1,0,1,0,1,0,0},
-      {0,1,0,0,1,0,1,1},
-      {1,0,1,0,2,0,0,0},
-      {1,0,1,1,0,1,0,0},
-      {0,0,1,1,1,0,0,1},
-      {0,0,1,0,0,1,1,1},
-      {1,1,0,1,0,0,1,0},
-      {0,1,0,0,0,1,1,1}
-    },
-    { // conn[1]
-      {1,0,1,0,0,1,1,0},
-      {0,1,0,0,1,1,0,1},
-      {0,1,1,0,0,0,0,2},
-      {1,1,0,1,1,0,0,0},
-      {0,1,0,1,1,0,1,0},
-      {0,0,2,0,0,1,1,0},
-      {1,0,0,1,1,0,1,0},
-      {1,0,0,1,0,1,0,1}
-    },
-    { // conn[2]
-      {1,0,1,1,0,0,1,0},
-      {0,1,0,1,0,1,0,1},
-      {0,0,1,0,1,1,1,0},
-      {0,1,1,0,1,0,0,1},
-      {1,0,0,1,0,1,0,1},
-      {1,1,0,1,0,0,1,0},
-      {1,0,0,0,2,1,0,0},
-      {0,1,1,0,0,0,1,1}
-    },
-    { // conn[3]
-      {0,0,0,1,1,0,1,1},
-      {1,1,0,1,0,1,0,0},
-      {0,0,0,1,1,1,0,1},
-      {1,0,1,0,0,0,2,0},
-      {0,1,1,0,0,1,0,1},
-      {1,0,1,0,1,0,0,1},
-      {0,1,1,1,0,0,1,0},
-      {1,1,0,0,1,1,0,0}
-    },
-    { // conn[4]
-      {1,0,0,1,1,0,0,1},
-      {0,0,2,1,0,1,0,0},
-      {1,1,0,0,0,1,1,0},
-      {1,0,0,0,1,0,0,2},
-      {0,1,0,1,0,0,2,0},
-      {0,1,1,0,1,0,1,0},
-      {0,1,1,1,0,0,0,1},
-      {1,0,0,0,1,2,0,0}
-    },
-    { // conn[5]
-      {0,1,0,1,1,0,0,1},
-      {1,0,1,0,0,1,1,0},
-      {2,0,0,1,0,1,0,0},
-      {0,0,2,0,0,0,1,1},
-      {1,0,0,0,0,1,1,1},
-      {0,2,0,0,2,0,0,0},
-      {0,1,1,1,0,0,0,1},
-      {0,0,0,1,1,1,1,0}
-    }
-  };
+  // conn = {
+  //   { // conn[0]
+  //     {1,1,0,1,0,1,0,0},
+  //     {0,1,0,0,1,0,1,1},
+  //     {1,0,1,0,2,0,0,0},
+  //     {1,0,1,1,0,1,0,0},
+  //     {0,0,1,1,1,0,0,1},
+  //     {0,0,1,0,0,1,1,1},
+  //     {1,1,0,1,0,0,1,0},
+  //     {0,1,0,0,0,1,1,1}
+  //   },
+  //   { // conn[1]
+  //     {1,0,1,0,0,1,1,0},
+  //     {0,1,0,0,1,1,0,1},
+  //     {0,1,1,0,0,0,0,2},
+  //     {1,1,0,1,1,0,0,0},
+  //     {0,1,0,1,1,0,1,0},
+  //     {0,0,2,0,0,1,1,0},
+  //     {1,0,0,1,1,0,1,0},
+  //     {1,0,0,1,0,1,0,1}
+  //   },
+  //   { // conn[2]
+  //     {1,0,1,1,0,0,1,0},
+  //     {0,1,0,1,0,1,0,1},
+  //     {0,0,1,0,1,1,1,0},
+  //     {0,1,1,0,1,0,0,1},
+  //     {1,0,0,1,0,1,0,1},
+  //     {1,1,0,1,0,0,1,0},
+  //     {1,0,0,0,2,1,0,0},
+  //     {0,1,1,0,0,0,1,1}
+  //   },
+  //   { // conn[3]
+  //     {0,0,0,1,1,0,1,1},
+  //     {1,1,0,1,0,1,0,0},
+  //     {0,0,0,1,1,1,0,1},
+  //     {1,0,1,0,0,0,2,0},
+  //     {0,1,1,0,0,1,0,1},
+  //     {1,0,1,0,1,0,0,1},
+  //     {0,1,1,1,0,0,1,0},
+  //     {1,1,0,0,1,1,0,0}
+  //   },
+  //   { // conn[4]
+  //     {1,0,0,1,1,0,0,1},
+  //     {0,0,2,1,0,1,0,0},
+  //     {1,1,0,0,0,1,1,0},
+  //     {1,0,0,0,1,0,0,2},
+  //     {0,1,0,1,0,0,2,0},
+  //     {0,1,1,0,1,0,1,0},
+  //     {0,1,1,1,0,0,0,1},
+  //     {1,0,0,0,1,2,0,0}
+  //   },
+  //   { // conn[5]
+  //     {0,1,0,1,1,0,0,1},
+  //     {1,0,1,0,0,1,1,0},
+  //     {2,0,0,1,0,1,0,0},
+  //     {0,0,2,0,0,0,1,1},
+  //     {1,0,0,0,0,1,1,1},
+  //     {0,2,0,0,2,0,0,0},
+  //     {0,1,1,1,0,0,0,1},
+  //     {0,0,0,1,1,1,1,0}
+  //   }
+  // };
   // conn = {
   //   { // conn[0]
   //     {1,0,1,0,1,0,1,0},
@@ -1050,6 +1178,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
       }
     }
   }
+  
   return conn;
 }
 
