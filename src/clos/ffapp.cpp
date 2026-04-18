@@ -1113,6 +1113,7 @@ void FFTask::cleanup() {
                     ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
                     //Performing append (as above ) with normalized and scaled traffic matrix inside update traffic matrix function 
                                         ffapp->topomanager->regional_topo_managers[region_id]->reverse=0;
+                    ffapp->topomanager->regional_topo_managers[region_id]->activeAlltoAll=1;
                     //ffapp->topomanager->demandrecorder->NormalizeTrafficMatrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);
                     assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));// it must be true  //Deeksha: base will be true if append is done correctly, this function checks only the base
                     eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
@@ -1143,6 +1144,7 @@ void FFTask::cleanup() {
                     ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
                     ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_idx = 0;
                     ffapp->topomanager->regional_topo_managers[region_id]->reverse=1;
+                    ffapp->topomanager->regional_topo_managers[region_id]->activeAlltoAll=1;
 
                 assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));
                 eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
@@ -2339,7 +2341,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
                 std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
-            flowSrc->pause_flow_in_region();        //Deeksha: Pausing the flow that does not have any connection
+            // flowSrc->pause_flow_in_region();        //Deeksha: Pausing the flow that does not have any connection
                 // flowSrc->is_elec = true;
             // // Update EPS volume statistics (sent)
             // node_eps_volume[src_node] += flow_size;
@@ -2457,6 +2459,7 @@ void finish_alltoall(void * a2ainfo) {
                   << " duration " << a2a_task->run_time << std::endl;
         // vamsi: toggle the direction, so that the topology is reverse for next phase of all to all
         int region_id = (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size;
+        a2a_task->ffapp->topomanager->regional_topo_managers[region_id]->activeAlltoAll=0;
         a2a_task->ffapp->topomanager ? a2a_task->ffapp->topomanager->transpose(region_id) : void();
         a2a_task->cleanup();
         // if (FFApplication::debug_exit==a2a_task->layer_id) {

@@ -31,7 +31,7 @@ extern uint32_t RTT;
 extern uint32_t SPEED;
 extern ofstream fct_util_out;
 
-static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
+// static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
 
 All2AllTrafficRecorder::All2AllTrafficRecorder(int layer_num, int region_num, int region_size, TcpRtxTimerScanner *rtx_scanner)
     : rtx_scanner(rtx_scanner), region_size(region_size), region_num(region_num), layer_num(layer_num)
@@ -1227,18 +1227,19 @@ conn={
 }
 
 //Deeksha: Adding the function here to find if there is any active all-to-all flow in the region, to decide whether we can skip the reconfiguration or not
-static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id) {  
-    list<TcpSrc *>::iterator i = region_manager->demandrecorder->rtx_scanner->_tcps.begin();  
-    while (i != region_manager->demandrecorder->rtx_scanner->_tcps.end()) {  
-        TcpSrc* tcpsrc = *i;  
+bool RegionalTopoManager::has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id) {  
+    // list<TcpSrc *>::iterator i = region_manager->demandrecorder->rtx_scanner->_tcps.begin();  
+    // while (i != region_manager->demandrecorder->rtx_scanner->_tcps.end()) {  
+    //     TcpSrc* tcpsrc = *i;  
           
-        // Check if it's an all-to-all flow and in the specified region  
-        if (tcpsrc->is_all2all && region_manager->is_in_region(tcpsrc)) {  
-            return true; // Found active all-to-all in this region  
-        }  
-        i++;  
-    }  
-    return false; // No active all-to-all found in this region  
+    //     // Check if it's an all-to-all flow and in the specified region  
+    //     if (tcpsrc->is_all2all && region_manager->is_in_region(tcpsrc)) {  
+    //         return true; // Found active all-to-all in this region  
+    //     }  
+    //     i++;  
+    // }  
+    // return false; // No active all-to-all found in this region  
+  return activeAlltoAll;
 }
 
 

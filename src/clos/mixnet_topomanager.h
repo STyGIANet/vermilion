@@ -77,6 +77,7 @@ public:
   std::vector<std::vector<int>> rotor_reconfig();
    void prepare_conn_cycle();
    void rotor_conn_cycle();
+  bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
   int nnodes;
   int region_size;
   int region_num;
@@ -111,6 +112,8 @@ public:
   // Track whether we've completed the first reconfiguration for this region
   bool first_reconf_done = false;
   std::vector<std::vector<int>> reconfig_conn_matrix;  // Store the conn matrix computed in start_reconf
+
+  bool activeAlltoAll = false;
 };
 
 class MixnetTopoManager {
