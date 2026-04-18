@@ -1112,6 +1112,7 @@ void FFTask::cleanup() {
                     //ffapp->topomanager->demandrecorder->dump_all_traffic_matrices(layer_id, region_id, all2all_task->all2all_traffic_matrix);        //Deeksha: For debugging purpose
                     ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);   //Deeksha: Occurs once per layer once per region
                     //Performing append (as above ) with normalized and scaled traffic matrix inside update traffic matrix function 
+                                        ffapp->topomanager->regional_topo_managers[region_id]->reverse=0;
                     //ffapp->topomanager->demandrecorder->NormalizeTrafficMatrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);
                     assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));// it must be true  //Deeksha: base will be true if append is done correctly, this function checks only the base
                     eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
@@ -1123,6 +1124,30 @@ void FFTask::cleanup() {
                     assert(false && "first layer should always trigger reconfig"); // should not happen
                 }
                 eventlist().sourceIsPending(*task, task->ready_time + ffapp->topomanager->reconf_delay + 10);// add some delay for reconfig //Deeksha: +10 value hardcoded, not sure why? could be to avoid event overlap
+            }
+            else if(task->type == FFTask::TASK_ALLTOALL && task->info.find("AGGREGATE forward") != std::string::npos && ffapp->is_mixnet && ffapp->topomanager){
+                // AGGREGATE should drive the same (layer, micro-batch) reconfiguration cycle as
+                // GROUP_BY-forward. We "poke" the regional topo manager to continue the existing
+                // cycle, but we do NOT append a second traffic matrix.
+                FFAlltoAll* all2all_task = dynamic_cast<FFAlltoAll*>(task);
+                all2all_task->updatetrafficmatrix();
+
+                int region_id = (all2all_task->from_node_ids[0] / 8) / ffapp->topomanager->region_size;
+                int layer_id = task->layer_id;
+                int micro_batch_id = task->micro_batch_id;
+
+                if (ffapp->topomanager->regional_topo_managers[region_id]->current_layer_id_2 != layer_id ||
+                    ffapp->topomanager->regional_topo_managers[region_id]->current_micro_batch_id_2 != micro_batch_id) {
+                    ffapp->topomanager->regional_topo_managers[region_id]->current_layer_id_2 = layer_id;
+                    ffapp->topomanager->regional_topo_managers[region_id]->current_micro_batch_id_2 = micro_batch_id;
+                    ffapp->topomanager->regional_topo_managers[region_id]->first_reconf_done = false;
+                    ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_idx = 0;
+                    ffapp->topomanager->regional_topo_managers[region_id]->reverse=1;
+
+                assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));
+                eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
+                    }
+                eventlist().sourceIsPending(*task, task->ready_time + ffapp->topomanager->reconf_delay + 10);
             }
             else{
                 eventlist().sourceIsPending(*task, task->ready_time);
@@ -2194,7 +2219,9 @@ void FFAlltoAll::doNextEvent() {
     std::cerr << "Task: " << this->taskid <<" name: "<<this->name<< " type: " << type << " counter: " << counter << std::endl;
     assert(curr_round == 0);
     assert(total_rounds == 0);
-    start_time = ready_time;
+    // This task can be scheduled later than its dependency-ready time (e.g., after reconfiguration).
+    // Never start flows in the past, or EventList::sourceIsPending() will assert.
+    start_time = std::max(ready_time, eventlist().now());
     state = FFTask::TASK_RUNNING;
     // calculate the total rounds
     for (size_t i = 0; i < from_node_ids.size()/ffapp->tp_degree; i++) {
@@ -2312,7 +2339,8 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
                 std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
-            // flowSrc->is_elec = true;
+            flowSrc->pause_flow_in_region();        //Deeksha: Pausing the flow that does not have any connection
+                // flowSrc->is_elec = true;
             // // Update EPS volume statistics (sent)
             // node_eps_volume[src_node] += flow_size;
             // // Update EPS volume statistics (received)

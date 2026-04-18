@@ -218,7 +218,8 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
           cerr << "route " << i << " " << route[i] << "->" << route[i + 1] << "Queue" << queues[route[i]][route[i + 1]]->_bitrate << endl;
         }
         // vamsi: no need for this assert, paths are available over time.
-        // assert(queues[route[i]][route[i + 1]]->_bitrate!=0);
+
+        //assert(queues[route[i]][route[i + 1]]->_bitrate!=0);
         routeout->push_back(queues[route[i]][route[i + 1]]);
         routeout->push_back(pipes[route[i]][route[i + 1]]);
       }

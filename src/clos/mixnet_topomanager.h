@@ -86,8 +86,12 @@ public:
   Mixnet* topo;
   int current_layer_id=-1;
   int current_micro_batch_id=-1;
+
   // vamsi: to togglge the topology direction between dispatch and combine all to all
   int reverse = 0;
+
+  int current_layer_id_2=-1;
+  int current_micro_batch_id_2=-1;
 
   int region_id;
   simtime_picosec reconf_delay;
@@ -95,6 +99,7 @@ public:
   bool periodic_reconf;
   simtime_picosec periodic_interval;
   bool conn_cycle_ready = false;
+  bool conn_cycle_ready_2 = false;
   std::vector<std::vector<std::vector<int>>> conn_cycle;
   size_t conn_cycle_idx = 0;
   TopoStatus status;

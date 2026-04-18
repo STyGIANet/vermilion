@@ -31,6 +31,7 @@ extern uint32_t RTT;
 extern uint32_t SPEED;
 extern ofstream fct_util_out;
 
+static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
 
 All2AllTrafficRecorder::All2AllTrafficRecorder(int layer_num, int region_num, int region_size, TcpRtxTimerScanner *rtx_scanner)
     : rtx_scanner(rtx_scanner), region_size(region_size), region_num(region_num), layer_num(layer_num)
@@ -229,6 +230,7 @@ void RegionalTopoManager::doNextEvent()
     {
       prepare_conn_cycle(); // Deeksha: Call this after matrix is ready before this TASK call for doNextEvent
     }
+    
     start_reconf();
     
   }
@@ -270,7 +272,7 @@ void RegionalTopoManager::start_reconf()
   }
    
   else{
-    eventlist.sourceIsPendingRel(*this, timeFromNs(10)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+    eventlist.sourceIsPendingRel(*this, timeFromNs(100)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
     std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
     status = TopoStatus::TOPO_WAIT_DRAIN;
   }
@@ -379,7 +381,8 @@ void RegionalTopoManager::finish_reconf()
   // Only skip scheduling when there are no paused flows after the first reconfiguration.
   // For the very first reconfiguration we still want to schedule the periodic reconf regardless
   // of paused_flow_count so that the periodic policy takes effect.
-  if (periodic_reconf && periodic_interval > 0 && (paused_flow_count > 0 || !first_reconf_done))
+  if (periodic_reconf && periodic_interval > 0 &&
+      (paused_flow_count > 0 || has_active_alltoall_in_region(this, region_id) || !first_reconf_done))
   {
     eventlist.sourceIsPending(*this, eventlist.now() + periodic_interval);
     std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
@@ -470,7 +473,7 @@ void RegionalTopoManager::set_regional_tcp_pause()
       paused_flow_count++;
       
       
-      std::cout << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+      std::cerr << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
       if(tcpsrc->is_all2all && tcpsrc->is_elec)
       {
         std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is electric." << std::endl;
@@ -572,7 +575,7 @@ void RegionalTopoManager::resume_regional_tcp_flows()
         // vamsi: clear regional pause flag and resume the flow
         tcpsrc->resume_flow_in_region();
         tcpsrc->resume_flow();
-        std::cout << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+        std::cerr << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
         //paused_flow_count--;
         resumed_flows++;
       }
@@ -1144,7 +1147,68 @@ conn={
   //     {1,0,0,1,1,1,0,0}
   //   }
   // };
-
+// conn = {
+//     { // conn[0]
+//       {1,1,1,0,0,1,0,0},
+//       {0,1,1,1,0,0,1,0},
+//       {1,0,1,0,1,0,1,0},
+//       {1,0,0,1,1,1,0,0},
+//       {0,0,0,1,1,0,1,1},
+//       {0,1,1,0,0,1,0,1},
+//       {1,1,0,0,0,0,1,1},
+//       {0,0,0,1,1,1,0,1}
+//     },
+//     { // conn[1]
+//       {0,2,0,1,0,1,0,0},
+//       {0,0,1,0,1,0,1,1},
+//       {1,0,1,0,1,0,0,1},
+//       {0,0,0,1,0,1,1,1},
+//       {0,1,1,1,1,0,0,0},
+//       {0,1,0,1,0,1,0,1},
+//       {1,0,1,0,1,0,1,0},
+//       {2,0,0,0,0,1,1,0}
+//     },
+//     { // conn[2]
+//       {0,2,0,0,1,0,0,1},
+//       {0,0,0,1,0,1,1,1},
+//       {1,0,1,0,1,0,0,1},
+//       {2,0,0,1,0,1,0,0},
+//       {0,1,1,1,1,0,0,0},
+//       {0,0,1,1,0,0,1,1},
+//       {0,1,1,0,1,1,0,0},
+//       {1,0,0,0,0,1,2,0}
+//     },
+//     { // conn[3]
+//       {0,0,1,0,1,1,0,1},
+//       {1,0,0,1,0,1,1,0},
+//       {0,1,1,0,1,0,1,0},
+//       {1,1,0,1,0,0,0,1},
+//       {0,0,0,0,0,2,1,1},
+//       {0,1,1,0,1,0,0,1},
+//       {1,0,1,1,0,0,1,0},
+//       {1,1,0,1,1,0,0,0}
+//     },
+//     { // conn[4]
+//       {0,0,1,0,1,0,1,1},
+//       {1,0,0,1,1,1,0,0},
+//       {0,1,0,1,0,1,1,0},
+//       {1,1,1,0,0,0,0,1},
+//       {1,0,0,0,0,2,0,1},
+//       {1,0,1,1,0,0,1,0},
+//       {0,1,0,1,1,0,0,1},
+//       {0,1,1,0,1,0,1,0}
+//     },
+//     { // conn[5]
+//       {0,0,1,0,0,1,1,1},
+//       {1,0,0,1,2,0,0,0},
+//       {0,0,0,1,0,1,1,1},
+//       {0,0,0,0,1,1,1,1},
+//       {2,1,1,0,0,0,0,0},
+//       {1,0,1,1,0,0,1,0},
+//       {0,2,0,0,0,1,0,1},
+//       {0,1,1,1,1,0,0,0}
+//     }
+//   };
   //std::vector<int> avail_conn(region_size, alpha);
   for (int k = 0; k < conn.size(); k++)  //Deeksha :CHeck this later
   {
@@ -1163,7 +1227,7 @@ conn={
 }
 
 //Deeksha: Adding the function here to find if there is any active all-to-all flow in the region, to decide whether we can skip the reconfiguration or not
-bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id) {  
+static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id) {  
     list<TcpSrc *>::iterator i = region_manager->demandrecorder->rtx_scanner->_tcps.begin();  
     while (i != region_manager->demandrecorder->rtx_scanner->_tcps.end()) {  
         TcpSrc* tcpsrc = *i;  
@@ -1191,18 +1255,18 @@ void RegionalTopoManager::rotor_conn_cycle()
   std::vector<int> avail_conn(region_size, alpha);
   for (int k = 1; k < region_size; k++)
   {
-    for (int i = 0; i < region_size; i++) {
-      for (int j = 0; j < region_size; j++) {
-        if (i == j) {
-          continue; // No self-connections
-        }
-        else if(j == (i+k)%region_size){
-          conn[i][j] = 1; // Initialize connection matrix
-          conn[j][i] = 1;
-          break;
-        }
-      }
-    }
+    // for (int i = 0; i < region_size; i++) {
+    //   for (int j = 0; j < region_size; j++) {
+    //     if (i == j) {
+    //       continue; // No self-connections
+    //     }
+    //     else if(j == (i+k)%region_size){
+    //       conn[i][j] = 1; // Initialize connection matrix
+    //       conn[j][i] = 1;
+    //       break;
+    //     }
+    //   }
+    // }
     conn_cycle.push_back(conn);
   }
   
@@ -1220,7 +1284,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << std::endl;
+  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
   for (int i = 0; i < region_size; i++) {
     for (int j = 0; j < region_size; j++) {
       std::cerr << conn[i][j] << " ";
@@ -1248,6 +1312,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
         else {
           topo->conn[j+start_node][i+start_node] = 0;
         }
+
       }
     }
   }
