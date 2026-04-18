@@ -41,7 +41,7 @@ for algorithm in "vermilion" "mixnet";do
                 for workload in "${workloads[@]}"; do
                     DUMP_DIR=$LOG_DIR/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
                     # Note: r and periodic_interval are both in nanoseconds units
-                    periodic_interval=$(python3 -c "print($r * 50)")
+                    periodic_interval=$(python3 -c "print($r * 500)")
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
                     
