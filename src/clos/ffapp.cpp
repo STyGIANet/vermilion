@@ -243,7 +243,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             assert("task pointer is null!" && false);
         }
         auto &this_task = *task_ptr;
-        std::cerr << "Loading task index " << i << ", task id "<<this_task.taskid()<<endl;
+        //std::cerr << "Loading task index " << i << ", task id "<<this_task.taskid()<<endl;
         assert(tasks.find(this_task.taskid()) == tasks.end());
         if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_ALLREDUCE ||
             this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_SUB_ALLREDUCE ||
