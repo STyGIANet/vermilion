@@ -270,7 +270,7 @@ void RegionalTopoManager::start_reconf()
   }
    
   else{
-    eventlist.sourceIsPendingRel(*this, timeFromNs(100)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+    eventlist.sourceIsPendingRel(*this, timeFromNs(10)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
     std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
     status = TopoStatus::TOPO_WAIT_DRAIN;
   }
@@ -1086,12 +1086,12 @@ conn={
   //std::vector<int> avail_conn(region_size, alpha);
   for (int k = 0; k < conn.size(); k++)  //Deeksha :CHeck this later
   {
-    for(int i = 0; i < region_size; i++) {
-      for(int j = 0; j < region_size; j++) {
-        // Initialize connection matrix
-          conn[k][j][i] = conn[k][i][j];       
-      }
-    }
+    // for(int i = 0; i < region_size; i++) {
+    //   for(int j = 0; j < region_size; j++) {
+    //     // Initialize connection matrix
+    //       conn[k][j][i] = conn[k][i][j];       
+    //   }
+    // }
         
     conn_cycle.push_back(conn[k]);
   }
@@ -1167,14 +1167,15 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   }
   std::cerr << "Available connections: ";
   for (int i = 0; i < region_size; i++) {
-    for (int j = i+1; j < region_size; j++) {
+    for (int j = 0; j < region_size; j++) {
       if(conn[i][j] > 0) {
         topo->conn[i+start_node][j+start_node] = conn[i][j];
-        topo->conn[j+start_node][i+start_node] = conn[i][j];
+        // vamsi: Oh no! We should set the reverse connection, that can override what we need for i-j, also this is done in mixnet because they assume birectional links and construct graph based on this assumption.
+        // topo->conn[j+start_node][i+start_node] = conn[i][j];
       }
       else {
         topo->conn[i+start_node][j+start_node] = 0;
-        topo->conn[j+start_node][i+start_node] = 0;
+        // topo->conn[j+start_node][i+start_node] = 0;
       }
     }
   }

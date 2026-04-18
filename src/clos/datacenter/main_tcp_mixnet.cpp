@@ -12,6 +12,8 @@
 #include <unistd.h>
 
 #include <cstdlib>
+#include <cmath>
+
 
 #include "network.h"
 #include "randomqueue.h"
@@ -227,8 +229,10 @@ int main(int argc, char **argv)
     }
     else if (!strcmp(argv[i], "-q"))
     {
-      queuesize = memFromPkt(atoi(argv[i + 1]));
-      cout << "queuesize " << queuesize << endl;
+      double val = atof(argv[i + 1]);
+      queuesize = memFromPkt(val);
+      std::cout << "memFromPkt " << val << " " << Packet::data_packet_size() << " " << ceil(val * Packet::data_packet_size()) << " " << (mem_b)(ceil(val * Packet::data_packet_size())) << std::endl;
+      cout << "queuesize " << double(queuesize) << endl;
       i++;
     }
     else if (!strcmp(argv[i], "-rdelay"))
@@ -415,7 +419,7 @@ int main(int argc, char **argv)
   std::cout << "simtime: " << simtime << " seconds" <<std::endl;
   std::cout << "========================\n" << std::endl;
 
-  TcpRtxTimerScanner tcpRtxScanner(timeFromMs(1), eventlist);
+  TcpRtxTimerScanner tcpRtxScanner(timeFromMs(1000), eventlist);
   int max_layer_num = 100;
   int region_size = ep_degree * tp_degree / 8;
   int region_num = (no_of_nodes/8) / region_size;

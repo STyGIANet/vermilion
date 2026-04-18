@@ -52,6 +52,7 @@ void ECNQueue::receivePacket(Packet &pkt)
 	if (_queuesize + pkt.size() > _maxsize)
 	{
 		/* if the packet doesn't fit in the queue, drop it */
+		std::cout << "packetdrop" << std::endl;
 		if (_logger)
 			_logger->logQueue(*this, QueueLogger::PKT_DROP, pkt);
 		pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_DROP);

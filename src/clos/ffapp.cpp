@@ -249,6 +249,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_SUB_ALLREDUCE ||
             this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_DP_ALLREDUCE ||
             this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_TP_ALLREDUCE) {
+            std::cout << "LOGTASK AllReduce" << std::endl;
             std::vector<uint64_t> node_group;
             for (int j = 0; j < this_task.to_node_ids()->size() ; j++) {
                 //node_group.push_back(reinterpret_cast<uint64_t>(this_task.to_node_ids()->Get(j)));
@@ -328,6 +329,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             }
         }
         else if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_REDUCESCATTER) {
+            std::cout << "LOGTASK ReduceScatter" << std::endl;
             // Ring reducescatter
             std::vector<uint64_t> node_group;
             for (int j = 0; j < this_task.to_node_ids()->size() ; j++) {
@@ -348,6 +350,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             );
         }
         else if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_ALLGATHER) {
+            std::cout << "LOGTASK AllGather" << std::endl;
             // Ring allgather
             std::vector<uint64_t> node_group;
             for (int j = 0; j < this_task.to_node_ids()->size() ; j++) {
@@ -368,6 +371,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             );
         }
         else if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_ALLTOALL) {
+            std::cout << "LOGTASK AlltoAll" << std::endl;
 
             std::vector<uint64_t> from_node;
             std::vector<uint64_t> to_node;
@@ -442,6 +446,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             cout<<" log1 task id "<<this_task.taskid()<<" created alltoall task "<<tasks[this_task.taskid()]->name<< " microbatch id " << this_task.micro_batch_id()<<" layer id " << this_task.layer_id() << " transfer size " << total_xfer_size<<endl;
         }
         else if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_P2P) {
+            std::cout << "LOGTASK P2P" << std::endl;
             // P2P
             std::vector<uint64_t> from_nodes;
             std::vector<uint64_t> to_nodes;
@@ -470,6 +475,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             );
         }
         else {
+            std::cout << "LOGTASK Default" << std::endl;
             tasks[this_task.taskid()] = new FFTask(
                 this, 
                 this_task.type(), 
@@ -2276,7 +2282,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
     TcpSink* flowSnk = new TcpSink();
     flowSrc->set_flowsize(flow_size); // bytes
     flowSrc->set_ssthresh(ffapp->ssthresh*Packet::data_packet_size());
-    flowSrc->_rto = timeFromMs(1);
+    flowSrc->_rto = timeFromMs(1000);
     
     // ffapp->tcpRtxScanner.registerTcp(*flowSrc);
     if (ffapp->tcpRtxScanner._enable_tcppairs) {

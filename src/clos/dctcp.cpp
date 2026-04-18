@@ -18,7 +18,7 @@ DCTCPSrc::DCTCPSrc(TcpLogger* logger, TrafficLogger* pktlogger, ofstream * _fstr
     _pkts_marked = 0;
     _alfa = 0;
     _past_cwnd = 2*Packet::data_packet_size();
-    _rto = timeFromMs(10);    
+    _rto = timeFromMs(1000);    
 }
 
 //drop detected
