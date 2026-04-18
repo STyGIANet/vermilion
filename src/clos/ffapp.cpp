@@ -20,6 +20,21 @@
 
 using json = nlohmann::json;
 
+namespace {
+void dump_region_matrix(std::ostream& os,
+                        const std::vector<std::vector<uint64_t>>& matrix) {
+    for (const auto& row : matrix) {
+        for (size_t i = 0; i < row.size(); ++i) {
+            if (i > 0) {
+                os << ' ';
+            }
+            os << row[i];
+        }
+        os << std::endl;
+    }
+}
+}
+
 int FFApplication::total_apps = 0;
 int FFApplication::finished_apps = 0;
 int FFApplication::debug_exit;
@@ -2191,21 +2206,52 @@ void FFAlltoAll::doNextEvent() {
     }
     
     std::cerr<< " all2all task " << " total rounds " << total_rounds <<" from node id size: " << from_node_ids.size() << " to node id size: " << to_node_ids.size() << std::endl;
+
+    int region_size = ffapp->topomanager ? ffapp->topomanager->region_size : 0;
+    std::vector<std::vector<uint64_t>> region_matrix(
+        region_size, std::vector<uint64_t>(region_size, 0));
     
     // Start flows
     for (size_t i = 0; i < from_node_ids.size()/ffapp->tp_degree; i++) {
         for (size_t j = 0; j < to_node_ids.size()/ffapp->tp_degree; j++) {
             for(int tp_idx=0;tp_idx<ffapp->tp_degree;tp_idx++) {
-                start_flow(from_node_ids[i*ffapp->tp_degree+tp_idx], to_node_ids[j*ffapp->tp_degree+tp_idx]);
-                std::cerr<< " all2all task " << " from_gpu_ids " << from_node_ids[i*ffapp->tp_degree+tp_idx] << " to_gpu_ids " << to_node_ids[j*ffapp->tp_degree+tp_idx] << std::endl;
-                int flow_size = operator_sizes[std::make_pair(from_node_ids[i*ffapp->tp_degree+tp_idx], to_node_ids[j*ffapp->tp_degree+tp_idx])];
-                int src_node = from_node_ids[i*ffapp->tp_degree+tp_idx];
-                int dst_node = to_node_ids[j*ffapp->tp_degree+tp_idx];
-                std::cerr << "flow_size: " << flow_size << " src_node: " << src_node << " dst_node: " << dst_node << std::endl;
-                //Deeksha: Debugging
-                cout<<"log flow flow_size: " << flow_size << " src_node: " << src_node << " dst_node: " << dst_node << std::endl;
+                int src_gpu = from_node_ids[i*ffapp->tp_degree+tp_idx];
+                int dst_gpu = to_node_ids[j*ffapp->tp_degree+tp_idx];
+                start_flow(src_gpu, dst_gpu);
+                uint64_t flow_size = operator_sizes[std::make_pair(src_gpu, dst_gpu)];
+                int src_node = src_gpu / NUM_GPU_PER_NODE;
+                int dst_node = dst_gpu / NUM_GPU_PER_NODE;
+                int src_region = region_size > 0 ? src_node % region_size : -1;
+                int dst_region = region_size > 0 ? dst_node % region_size : -1;
+                if (region_size > 0 && src_node != dst_node) {
+                    region_matrix[src_region][dst_region] += flow_size;
+                }
+                std::cout << "A2A_FLOW task_id=" << this->taskid
+                          << " micro_batch=" << this->micro_batch_id
+                          << " layer=" << this->layer_id
+                          << " src_gpu=" << src_gpu
+                          << " dst_gpu=" << dst_gpu
+                          << " src_node=" << src_node
+                          << " dst_node=" << dst_node
+                          << " src_region=" << src_region
+                          << " dst_region=" << dst_region
+                          << " flow_size=" << flow_size
+                          << std::endl;
             }
         }
+    }
+
+    if (region_size > 0) {
+        std::cout << "A2A_REGION_MATRIX_BEGIN task_id=" << this->taskid
+                  << " micro_batch=" << this->micro_batch_id
+                  << " layer=" << this->layer_id
+                  << " region_size=" << region_size
+                  << std::endl;
+        dump_region_matrix(std::cout, region_matrix);
+        std::cout << "A2A_REGION_MATRIX_END task_id=" << this->taskid
+                  << " micro_batch=" << this->micro_batch_id
+                  << " layer=" << this->layer_id
+                  << std::endl;
     }
 }
 
@@ -2347,6 +2393,8 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
         else {
             flowSrc->connect(*routeout, *routein, *flowSnk, curr_round > 0 ? eventlist().now() : start_time);
         }
+        // vamsi: Let the tcp send everything out at one go, and let the topology deal with it.
+        flowSrc->_cwnd = 0xffffffff;
     }
     else {
         flowSrc->connect(*routeout, *routein, *flowSnk, curr_round > 0 ? eventlist().now() : start_time);
@@ -2379,10 +2427,13 @@ void finish_alltoall(void * a2ainfo) {
                   << " start " << a2a_task->start_time
                   << " finish " << a2a_task->finish_time
                   << " duration " << a2a_task->run_time << std::endl;
+        // vamsi: toggle the direction, so that the topology is reverse for next phase of all to all
+        int region_id = (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size;
+        a2a_task->ffapp->topomanager ? a2a_task->ffapp->topomanager->transpose(region_id) : void();
         a2a_task->cleanup();
-        if (FFApplication::debug_exit==a2a_task->layer_id) {
-            exit(0);
-        }
+        // if (FFApplication::debug_exit==a2a_task->layer_id) {
+        //     exit(0);
+        // }
     }
 }
 

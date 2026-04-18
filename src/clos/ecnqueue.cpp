@@ -128,7 +128,7 @@ void ECNQueue::completeService()
 		dyn_sch->do_reconf();
 	}
 	else if (regional_topo_manager && regional_topo_manager->status == RegionalTopoManager::TopoStatus::TOPO_RECONF) {
-		regional_topo_manager->do_reconf();
+		// regional_topo_manager->do_reconf();
 	}
 	else {
 	}

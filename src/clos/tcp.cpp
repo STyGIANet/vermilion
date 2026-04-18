@@ -153,9 +153,8 @@ void TcpSrc::set_app_limit(int pktps)
 
 void TcpSrc::startflow()
 {
-	// _cwnd = 100 * _mss;
-	// vamsi: Let the tcp send everything out at one go, and let the topology deal with it.
-	_cwnd = 0xfffffff0;
+	_cwnd = 100 * _mss;
+	// _cwnd = 0xfffffff0;
 	_unacked = _cwnd;
 	_established = false;
 
@@ -548,8 +547,8 @@ void TcpSrc::send_packets()
 		// send SYN packet and wait for SYN/ACK
 		Packet *p = TcpPacket::new_syn_pkt(_flow, *_route, 1, 1);
 		_highest_sent = 1;
-
-		p->sendOn();
+		// p->sendOn();
+		_sink->receivePacket(*p);
 
 		if (_RFC2988_RTO_timeout == timeInf)
 		{ // RFC2988 5.1
@@ -657,7 +656,8 @@ void TcpSrc::retransmit_packet()
 		assert(_highest_sent == 1);
 
 		Packet *p = TcpPacket::new_syn_pkt(_flow, *_route, 1, 1);
-		p->sendOn();
+		// p->sendOn();
+		_sink->receivePacket(*p);
 
 		// cerr << "Resending SYN, waiting for SYN/ACK" << endl;
 		return;
@@ -694,7 +694,6 @@ void TcpSrc::retransmit_packet()
 #else
 	TcpPacket *p = TcpPacket::newpkt(_flow, *_route, _last_acked + 1, data_seq, _mss);
 #endif
-
 	p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
 	p->set_ts(eventlist().now());
 	p->sendOn();

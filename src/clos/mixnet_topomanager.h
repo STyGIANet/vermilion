@@ -86,6 +86,9 @@ public:
   Mixnet* topo;
   int current_layer_id=-1;
   int current_micro_batch_id=-1;
+  // vamsi: to togglge the topology direction between dispatch and combine all to all
+  int reverse = 0;
+
   int region_id;
   simtime_picosec reconf_delay;
   simtime_picosec reconfig_end_time;
@@ -118,6 +121,10 @@ public:
   bool periodic_reconf;
   simtime_picosec periodic_interval;
   All2AllTrafficRecorder * demandrecorder;
+  void transpose(int regionId){
+    regional_topo_managers[regionId]->reverse = (regional_topo_managers[regionId]->reverse + 1)%2;
+    regional_topo_managers[regionId]->conn_cycle_ready = 0;
+  }
 };
 
 #endif // MIXNET_TOPO_MANAGER_H
