@@ -752,7 +752,7 @@ void TcpSrc::rtx_timer_hook(simtime_picosec now, simtime_picosec period)
 
 void TcpSrc::doNextEvent()
 {
-	std::cerr <<"TcpSrc::doNextEvent()"<<std::endl;
+	//std::cerr <<"TcpSrc::doNextEvent()"<<std::endl;
 	if (_rtx_timeout_pending)
 	{
 		_rtx_timeout_pending = false;

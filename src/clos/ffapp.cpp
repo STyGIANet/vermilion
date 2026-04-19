@@ -430,7 +430,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
                         }
                         //Deeksha: Debugging 
                         //cout<<" from_node "<<fn<<" to_node "<<tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<"tp degree" <<tp_degree<<"EP Degree"<<ep_degree<<endl;
-                        cout<<" log3 task id "<<this_task.taskid()<<" from_node "<<fn<<" to_node "<<tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<" tp degree" <<tp_degree<<" EP Degree"<<ep_degree<<endl;
+                        //cout<<" log3 task id "<<this_task.taskid()<<" from_node "<<fn<<" to_node "<<tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<" tp degree" <<tp_degree<<" EP Degree"<<ep_degree<<endl;
                     }
                 }
 
@@ -458,7 +458,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
                 this_task.target_layer_id(),
                 this_task.runtime()
             );
-            cout<<" log1 task id "<<this_task.taskid()<<" created alltoall task "<<tasks[this_task.taskid()]->name<< " microbatch id " << this_task.micro_batch_id()<<" layer id " << this_task.layer_id() << " transfer size " << total_xfer_size<<endl;
+            //cout<<" log1 task id "<<this_task.taskid()<<" created alltoall task "<<tasks[this_task.taskid()]->name<< " microbatch id " << this_task.micro_batch_id()<<" layer id " << this_task.layer_id() << " transfer size " << total_xfer_size<<endl;
         }
         else if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_P2P) {
             std::cout << "LOGTASK P2P" << std::endl;
@@ -1089,7 +1089,7 @@ void FFTask::cleanup() {
     for (uint64_t next_id: next_tasks) {
         FFTask * task = ffapp->tasks[next_id];
         task->counter--;
-        std::cerr << this->taskid << " -> Task " << task->taskid << " counter at " << task->counter <<" name: "<<task->name <<" task type:"<< task->type<<std::endl;
+        //std::cerr << this->taskid << " -> Task " << task->taskid << " counter at " << task->counter <<" name: "<<task->name <<" task type:"<< task->type<<std::endl;
         
         if (task->counter == 0) {
             task->ready_time = finish_time;
@@ -1175,8 +1175,8 @@ void FFTask::cleanup() {
 }
 
 void FFTask::doNextEvent() {
-    std::cerr << "FFTask::doNextEvent()"<<std::endl;
-    std::cerr << "Task: " << this->taskid <<" name: "<<this->name<< " type: " << type << " counter: " << counter << std::endl;
+    //std::cerr << "FFTask::doNextEvent()"<<std::endl;
+    //std::cerr << "Task: " << this->taskid <<" name: "<<this->name<< " type: " << type << " counter: " << counter << std::endl;
     taskstart();
 }
 
@@ -1431,7 +1431,7 @@ void FFRingAllreduce::start_flow(int src_idx, int id) {
         //std::cerr << "intra-node communication" << std::endl;
         //intra-node communication
         finish_time = start_time + timeFromSec((operator_size / node_group.size()) / ffapp->nvlink_bandwidth);//refer to flexflow simulation
-        std::cerr << "intra-node communication" << " start time: "<< start_time <<" transmission time: " << timeFromSec((operator_size / node_group.size()) / ffapp->nvlink_bandwidth) << " transmission size "<< operator_size << " group size" << node_group.size() << " nvlink bandwidth" << ffapp->nvlink_bandwidth << " finish time "<< finish_time << std::endl;
+        //std::cerr << "intra-node communication" << " start time: "<< start_time <<" transmission time: " << timeFromSec((operator_size / node_group.size()) / ffapp->nvlink_bandwidth) << " transmission size "<< operator_size << " group size" << node_group.size() << " nvlink bandwidth" << ffapp->nvlink_bandwidth << " finish time "<< finish_time << std::endl;
         ar_finish_ring(f);
         return;
     }
@@ -2218,8 +2218,8 @@ void FFAlltoAll::updatetrafficmatrix() {
 
 void FFAlltoAll::doNextEvent() {
     //std::cerr << "Task: " << (uint64_t)this << " type: " << type << " counter: " << counter << std::endl;
-    std::cerr << "FFAlltoAll::doNextEvent()" <<std::endl;
-    std::cerr << "Task: " << this->taskid <<" name: "<<this->name<< " type: " << type << " counter: " << counter << std::endl;
+    // std::cerr << "FFAlltoAll::doNextEvent()" <<std::endl;
+    // std::cerr << "Task: " << this->taskid <<" name: "<<this->name<< " type: " << type << " counter: " << counter << std::endl;
     assert(curr_round == 0);
     assert(total_rounds == 0);
     // This task can be scheduled later than its dependency-ready time (e.g., after reconfiguration).
@@ -2235,7 +2235,7 @@ void FFAlltoAll::doNextEvent() {
         }
     }
     
-    std::cerr<< " all2all task " << " total rounds " << total_rounds <<" from node id size: " << from_node_ids.size() << " to node id size: " << to_node_ids.size() << std::endl;
+   // std::cerr<< " all2all task " << " total rounds " << total_rounds <<" from node id size: " << from_node_ids.size() << " to node id size: " << to_node_ids.size() << std::endl;
 
     int region_size = ffapp->topomanager ? ffapp->topomanager->region_size : 0;
     std::vector<std::vector<uint64_t>> region_matrix(
@@ -2256,32 +2256,32 @@ void FFAlltoAll::doNextEvent() {
                 if (region_size > 0 && src_node != dst_node) {
                     region_matrix[src_region][dst_region] += flow_size;
                 }
-                std::cout << "A2A_FLOW task_id=" << this->taskid
-                          << " micro_batch=" << this->micro_batch_id
-                          << " layer=" << this->layer_id
-                          << " src_gpu=" << src_gpu
-                          << " dst_gpu=" << dst_gpu
-                          << " src_node=" << src_node
-                          << " dst_node=" << dst_node
-                          << " src_region=" << src_region
-                          << " dst_region=" << dst_region
-                          << " flow_size=" << flow_size
-                          << std::endl;
+                // std::cout << "A2A_FLOW task_id=" << this->taskid
+                //           << " micro_batch=" << this->micro_batch_id
+                //           << " layer=" << this->layer_id
+                //           << " src_gpu=" << src_gpu
+                //           << " dst_gpu=" << dst_gpu
+                //           << " src_node=" << src_node
+                //           << " dst_node=" << dst_node
+                //           << " src_region=" << src_region
+                //           << " dst_region=" << dst_region
+                //           << " flow_size=" << flow_size
+                //           << std::endl;
             }
         }
     }
 
     if (region_size > 0) {
-        std::cout << "A2A_REGION_MATRIX_BEGIN task_id=" << this->taskid
-                  << " micro_batch=" << this->micro_batch_id
-                  << " layer=" << this->layer_id
-                  << " region_size=" << region_size
-                  << std::endl;
-        dump_region_matrix(std::cout, region_matrix);
-        std::cout << "A2A_REGION_MATRIX_END task_id=" << this->taskid
-                  << " micro_batch=" << this->micro_batch_id
-                  << " layer=" << this->layer_id
-                  << std::endl;
+        // std::cout << "A2A_REGION_MATRIX_BEGIN task_id=" << this->taskid
+        //           << " micro_batch=" << this->micro_batch_id
+        //           << " layer=" << this->layer_id
+        //           << " region_size=" << region_size
+        //           << std::endl;
+        // dump_region_matrix(std::cout, region_matrix);
+        // std::cout << "A2A_REGION_MATRIX_END task_id=" << this->taskid
+        //           << " micro_batch=" << this->micro_batch_id
+        //           << " layer=" << this->layer_id
+        //           << std::endl;
     }
 }
 
@@ -2296,7 +2296,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
     uint64_t flow_size;
     
     flow_size = operator_sizes[std::make_pair(src_gpu, dst_gpu)];
-    std::cerr << " FFAlltoAll::start_flow: "<<" from "<< src_gpu << " to "<< dst_gpu <<" size " << flow_size <<" task id: " << this->taskid << std::endl;
+    //std::cerr << " FFAlltoAll::start_flow: "<<" from "<< src_gpu << " to "<< dst_gpu <<" size " << flow_size <<" task id: " << this->taskid << std::endl;
     // f->src_idx = src_idx;
     // f->round = round;
     assert(ffapp->gpus[src_gpu]==src_gpu && ffapp->gpus[dst_gpu]==dst_gpu);
@@ -2309,7 +2309,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
     if ((src_gpu / NUM_GPU_PER_NODE) == (dst_gpu / NUM_GPU_PER_NODE)) {
         // intra-node communication
         finish_time = start_time + timeFromSec(flow_size / ffapp->nvlink_bandwidth);
-        std::cerr << "intra-node communication" << " start time: "<< start_time <<" transmission time: " << timeFromSec(flow_size / ffapp->nvlink_bandwidth) << " transmission size "<< flow_size << " nvlink bandwidth" << ffapp->nvlink_bandwidth << " finish time "<< finish_time << std::endl;
+        //std::cerr << "intra-node communication" << " start time: "<< start_time <<" transmission time: " << timeFromSec(flow_size / ffapp->nvlink_bandwidth) << " transmission size "<< flow_size << " nvlink bandwidth" << ffapp->nvlink_bandwidth << " finish time "<< finish_time << std::endl;
         f->intra_node_routing++;
         //Deeksha: Debugging
         //std::cout << "intra-node communication" << " start time: "<< start_time <<" transmission time: " << timeFromSec(flow_size / ffapp->nvlink_bandwidth) << " transmission size "<< flow_size << " nvlink bandwidth" << ffapp->nvlink_bandwidth << " finish time "<< finish_time << std::endl;
@@ -2332,7 +2332,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
-            std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+            //std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         else {
             //Add tje flow to ocs but pause the flow immediately, we will resume the flow after reconfig
@@ -2341,7 +2341,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
-                std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+                //std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
             // flowSrc->pause_flow_in_region();        //Deeksha: Pausing the flow that does not have any connection
                 // flowSrc->is_elec = true;
             // // Update EPS volume statistics (sent)
@@ -2439,7 +2439,7 @@ void finish_alltoall(void * a2ainfo) {
     FFAlltoAllFlow * a2a = static_cast<FFAlltoAllFlow*>(a2ainfo);
     FFAlltoAll * a2a_task = a2a->a2a;
     
-    std::cerr << "finish_alltoall "<< a2a_task->id <<" from " << a2a->src_idx << " to " << a2a->dst_idx << std::endl;
+    //std::cerr << "finish_alltoall "<< a2a_task->id <<" from " << a2a->src_idx << " to " << a2a->dst_idx << std::endl;
 
     a2a_task->curr_round++;
     std::cerr << "alltoall round_complete task_id " << a2a_task->taskid
