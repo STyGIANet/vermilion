@@ -1,7 +1,7 @@
 ## Build and run
 
 Prerequisites
-- Put the `mixnet_flatbuf` file in the project root (the main folder).
+- Place the `mixnet_flatbuf` file in the project root (the main folder).
 
 Build
 - Run the build script (it performs a simple clean + build):

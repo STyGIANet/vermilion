@@ -221,7 +221,7 @@ RegionalTopoManager::RegionalTopoManager(Mixnet *topo, All2AllTrafficRecorder *d
 void RegionalTopoManager::doNextEvent()
 {
   // TODO: trigger this in ffapp
-  std::cerr << "RegionalTopoManager::doNextEvent() status=" << static_cast<int>(status) << " time = " << eventlist.now() <<std::endl;
+  //std::cerr << "RegionalTopoManager::doNextEvent() status=" << static_cast<int>(status) << " time = " << eventlist.now() <<std::endl;
   if (status == TopoStatus::TOPO_LIVE)
   {
     
@@ -246,7 +246,7 @@ void RegionalTopoManager::doNextEvent()
    
   else{
       eventlist.sourceIsPendingRel(*this, timeFromNs(100)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
-      std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
+      //std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
       status = TopoStatus::TOPO_WAIT_DRAIN;
   }
   }
@@ -255,7 +255,7 @@ void RegionalTopoManager::doNextEvent()
     finish_reconf();
     status = TopoStatus::TOPO_LIVE;
     reconfig_end_time = 0;
-    std::cout<< " Topology reconfiguration finished for region " << region_id << " at time " << eventlist.now() << std::endl;
+    //std::cout<< " Topology reconfiguration finished for region " << region_id << " at time " << eventlist.now() << std::endl;
   }
 }
 
@@ -273,7 +273,7 @@ void RegionalTopoManager::start_reconf()
    
   else{
     eventlist.sourceIsPendingRel(*this, timeFromNs(100)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
-    std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
+    //std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
     status = TopoStatus::TOPO_WAIT_DRAIN;
   }
   //Deeksha: To test without waiting for drain  -> failed with an assertion error in finish_reconf because the queues are not empty and we are trying to set them to ready state  if we skip this assert another next hop assert issue raises
@@ -332,7 +332,7 @@ void RegionalTopoManager::_do_reconf()
   status = TopoStatus::TOPO_RECONF;
   eventlist.sourceIsPendingRel(*this, reconf_delay);
   reconfig_end_time = eventlist.now() + reconf_delay + 1;
-  std::cout << "Region " << region_id <<" layer id " << current_layer_id << " reconfiguration will finish at " << reconfig_end_time << std::endl;
+  //std::cout << "Region " << region_id <<" layer id " << current_layer_id << " reconfiguration will finish at " << reconfig_end_time << std::endl;
 }
 
 void RegionalTopoManager::finish_reconf()
@@ -385,11 +385,11 @@ void RegionalTopoManager::finish_reconf()
       (paused_flow_count > 0 || has_active_alltoall_in_region(this, region_id) || !first_reconf_done))
   {
     eventlist.sourceIsPending(*this, eventlist.now() + periodic_interval);
-    std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
+    //std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
   }
   else
   {
-    std::cout<< "No periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() << " paused_flow_count: " << paused_flow_count << std::endl;
+    //std::cout<< "No periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() << " paused_flow_count: " << paused_flow_count << std::endl;
   }
 
   // Mark that we've completed at least one reconfiguration for this region
@@ -437,13 +437,13 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
         // }
 
         //Do nothing, just counting the inflight packets
-        std::cerr << "Draining pipe " << i << ", " << j << " size " << p->_inflight.size() <<std::endl;
-        std::cout<< "*Check*" << std::endl;
+        //std::cerr << "Draining pipe " << i << ", " << j << " size " << p->_inflight.size() <<std::endl;
+        //std::cout<< "*Check*" << std::endl;
 
         // vamsi: only account inflight packets; don't change queue state here
         non_empty_queues += p->_inflight.size();
         //std::cout<<"Inflight packet types in pipe p->type "<< p->type << std::endl;
-        std::cout<<"Pipe "<<i<<","<<j<<" size "<<p->_inflight.size()<< std::endl;
+       // std::cout<<"Pipe "<<i<<","<<j<<" size "<<p->_inflight.size()<< std::endl;
       }
         
     }
@@ -473,14 +473,14 @@ void RegionalTopoManager::set_regional_tcp_pause()
       paused_flow_count++;
       
       
-      std::cerr << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+      //std::cerr << "Pausing flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
       if(tcpsrc->is_all2all && tcpsrc->is_elec)
       {
-        std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is electric." << std::endl;
+        //std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is electric." << std::endl;
       }
       else if(tcpsrc->is_all2all && !tcpsrc->is_elec)
       {
-        std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is optical." << std::endl;
+        //std::cout << "Flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " is optical." << std::endl;
       }
       
     }
@@ -498,7 +498,7 @@ void RegionalTopoManager::set_regional_tcp_pause()
     // }
     i++;
   }
-  std::cout << "For region " << region_id << " Total flows paused: " << paused_flow_count << std::endl;
+  //std::cout << "For region " << region_id << " Total flows paused: " << paused_flow_count << std::endl;
 }
 
 
@@ -575,18 +575,18 @@ void RegionalTopoManager::resume_regional_tcp_flows()
         // vamsi: clear regional pause flag and resume the flow
         tcpsrc->resume_flow_in_region();
         tcpsrc->resume_flow();
-        std::cerr << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
+        //std::cerr << "Resuming flow from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << " at index " << conn_cycle_idx << std::endl;
         //paused_flow_count--;
         resumed_flows++;
       }
       else
       {
-        std::cout << "Keeping flow paused (no OCS conn) from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
+        //std::cout << "Keeping flow paused (no OCS conn) from " << tcpsrc->_flow_src << " to " << tcpsrc->_flow_dst << std::endl;
       }
     }
     i++;
   }
-  std::cout << "For region " << region_id << " Total flows resumed: " << resumed_flows << " out of " << paused_flow_count <<std::endl;
+  //std::cout << "For region " << region_id << " Total flows resumed: " << resumed_flows << " out of " << paused_flow_count <<std::endl;
 }
 
 void RegionalTopoManager::update_regional_queue_bandwidth()
@@ -612,13 +612,13 @@ void RegionalTopoManager::update_regional_queue_bandwidth()
     }
   }
  //Printing the updated conn matrix for debugging
-  std::cout << "Updated conn matrix for region " << region_id << " at layer " << current_layer_id << ":" << std::endl;
-  for (int i = 0; i < region_size; i++) {
-    for (int j = 0; j < region_size; j++) {
-      std::cout << reconfig_conn_matrix[i][j] << " ";
-    }
-    std::cout << std::endl;
-  }
+  // std::cout << "Updated conn matrix for region " << region_id << " at layer " << current_layer_id << ":" << std::endl;
+  // for (int i = 0; i < region_size; i++) {
+  //   for (int j = 0; j < region_size; j++) {
+  //     std::cout << reconfig_conn_matrix[i][j] << " ";
+  //   }
+  //   std::cout << std::endl;
+  // }
   // direct connect no need to update the path
   // topo->renew_routes_ocs(start_node, end_node); // update regional routes
 }
@@ -1450,14 +1450,14 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
-  for (int i = 0; i < region_size; i++) {
-    for (int j = 0; j < region_size; j++) {
-      std::cerr << conn[i][j] << " ";
-    }
-    std::cerr << std::endl;
-  }
-  std::cerr << "Available connections: ";
+  // std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
+  // for (int i = 0; i < region_size; i++) {
+  //   for (int j = 0; j < region_size; j++) {
+  //     std::cerr << conn[i][j] << " ";
+  //   }
+  //   std::cerr << std::endl;
+  // }
+  // std::cerr << "Available connections: ";
   for (int i = 0; i < region_size; i++) {
     for (int j = 0; j < region_size; j++) {
       // if (!reverse){
@@ -1494,14 +1494,14 @@ std::vector<std::vector<int>> RegionalTopoManager::rotor_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << std::endl;
-  for (int i = 0; i < region_size; i++) {
-    for (int j = 0; j < region_size; j++) {
-      std::cerr << conn[i][j] << " ";
-    }
-    std::cerr << std::endl;
-  }
-  std::cerr << "Available connections: ";
+  // std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << std::endl;
+  // for (int i = 0; i < region_size; i++) {
+  //   for (int j = 0; j < region_size; j++) {
+  //     std::cerr << conn[i][j] << " ";
+  //   }
+  //   std::cerr << std::endl;
+  // }
+  // std::cerr << "Available connections: ";
   for (int i = 0; i < region_size; i++) {
     for (int j = i+1; j < region_size; j++) {
       if(conn[i][j] > 0) {
