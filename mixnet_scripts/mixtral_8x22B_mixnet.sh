@@ -10,8 +10,8 @@ REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 
-DEBUG=35
-COMPILE=0
+DEBUG=2
+COMPILE=1
 
 
 N=0
