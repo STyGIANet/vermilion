@@ -517,6 +517,14 @@ void Mixnet::random_connect() {
       }
     }
   }
+  std::cerr << "Debug - Conn matrix (random_connect):" << std::endl;
+  assert(conn.size() != 0);
+  for (size_t i = 0; i < conn.size(); ++i) {
+    for (size_t j = 0; j < conn.size(); ++j) {
+      std::cerr << conn[i][j] << " ";
+    }
+    std::cerr << std::endl;
+  }
   renew_routes_ocs(0, _no_of_nodes);
 }
 

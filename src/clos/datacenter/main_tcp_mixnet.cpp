@@ -130,6 +130,7 @@ int main(int argc, char **argv)
   string opt_method = "sipring";
   int alpha = 6;
   int no_of_nodes = DEFAULT_NODES;
+  int debug = -1;
 
   // Default flowfile path
   string flowfile = "../../../test/taskgraph.fbuf";       // so we can read the flows from a specified file
@@ -292,6 +293,12 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[i], "-utiltime"))
     {
       utiltime = atof(argv[i + 1]);
+      i++;
+    }
+    else if (!strcmp(argv[i], "-debug"))
+    {
+      debug = atoi(argv[i + 1]);
+      FFApplication::debug_exit = debug;
       i++;
     }
     else

@@ -12,7 +12,6 @@ mixnet_flatbuf/
 *.out
 
 src/clos/datacentre/logs/
-src/clos/datacenter/logs/
 
 src/clos/datacenter/logs/
 src/clos/datacenter/htsim_tcp_*
@@ -22,3 +21,4 @@ src/clos/libhtsim.a
 
 mixnet_scripts/compile_error.txt
 mixnet_scripts/compile_output.txt
+logs/

@@ -22,6 +22,7 @@ using json = nlohmann::json;
 
 int FFApplication::total_apps = 0;
 int FFApplication::finished_apps = 0;
+int FFApplication::debug_exit = -1;
 bool check_maps_equal(const std::unordered_map<std::pair<int, int>, uint64_t, pair_hash> map1,
                       const std::unordered_map<std::pair<int, int>, uint64_t, pair_hash> map2) {
     if (map1.size() != map2.size()) {
@@ -228,12 +229,12 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
     }
 
     // load tasks
-    std::cerr << "load_taskgraph_flatbuf: start load tasks"<<endl;
+   // std::cerr << "load_taskgraph_flatbuf: start load tasks"<<endl;
     if (!fbuf_tg->tasks()) {
         std::cerr << "ERROR: tasks() is null!" << std::endl;
         assert("tasks() is null!" && false);
     }
-    std::cerr << "Total tasks to load: " << fbuf_tg->tasks()->size() << endl;
+    //std::cerr << "Total tasks to load: " << fbuf_tg->tasks()->size() << endl;
     
     for (int i = 0; i < fbuf_tg->tasks()->size(); i++) {
         auto task_ptr = fbuf_tg->tasks()->Get(i);
@@ -242,7 +243,7 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
             assert("task pointer is null!" && false);
         }
         auto &this_task = *task_ptr;
-        std::cerr << "Loading task index " << i << ", task id "<<this_task.taskid()<<endl;
+        //std::cerr << "Loading task index " << i << ", task id "<<this_task.taskid()<<endl;
         assert(tasks.find(this_task.taskid()) == tasks.end());
         if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_ALLREDUCE ||
             this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_SUB_ALLREDUCE ||
@@ -407,16 +408,18 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph, std::string 
                         {
                             global_operator_sizes[std::make_pair(fn, tn)] = operator_sizes[std::make_pair(fn, tn)];
                         }
+                        cout<<" log3 task id "<<this_task.taskid()<<" from_node "<<fn<<" to_node "<< tn<<" size "<<operator_sizes[std::make_pair(fn, tn)]<<" tp degree " <<tp_degree<<" EP Degree "<<ep_degree<<endl;
+                   
                     }
                 }
             }
-            std::cerr << " operator_sizes summary: total_xfer_size=" << total_xfer_size
-                      << " from_node_groups=" << this_task.from_node_ids()->size() / tp_degree
-                      << " micro_batch_id=" << this_task.micro_batch_id()
-                      << " info=" << this_task.info()->str()
-                      << std::endl;
-            std::cerr << " operator_sizes matrix" <<endl;
-            print_operator_sizes_matrix(operator_sizes,this_task.from_node_ids()->size(),tp_degree);
+            //std::cerr << " operator_sizes summary: total_xfer_size=" << total_xfer_size
+                    //   << " from_node_groups=" << this_task.from_node_ids()->size() / tp_degree
+                    //   << " micro_batch_id=" << this_task.micro_batch_id()
+                    //   << " info=" << this_task.info()->str()
+                    //   << std::endl;
+            //std::cerr << " operator_sizes matrix" <<endl;
+            //print_operator_sizes_matrix(operator_sizes,this_task.from_node_ids()->size(),tp_degree);
 
             tasks[this_task.taskid()] = new FFAlltoAll(
                 this,
@@ -533,10 +536,10 @@ void FFApplication::load_taskgraph_flatbuf(std::string & taskgraph) {
     }
 
     // load tasks
-    std::cerr << "load_taskgraph_flatbuf: start load tasks"<<endl;
+    //std::cerr << "load_taskgraph_flatbuf: start load tasks"<<endl;
     for (int i = 0; i < fbuf_tg->tasks()->size(); i++) {
         auto &this_task = *fbuf_tg->tasks()->Get(i);
-        std::cerr << "task id "<<this_task.taskid()<<endl;
+        //std::cerr << "task id "<<this_task.taskid()<<endl;
         assert(tasks.find(this_task.taskid()) == tasks.end());
         if (this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_ALLREDUCE ||
             this_task.type() == FlatBufTaskGraph::SimTaskType_TASK_SUB_ALLREDUCE ||
@@ -778,7 +781,7 @@ void FFApplication::start_init_tasks() {
             count++;
         }
     }
-    std::cerr << "added " << count << " init tasks." << std::endl;
+    //std::cerr << "added " << count << " init tasks." << std::endl;
 }
 
 void FFApplication::reset_and_restart() {
@@ -1058,7 +1061,7 @@ void FFTask::cleanup() {
     for (uint64_t next_id: next_tasks) {
         FFTask * task = ffapp->tasks[next_id];
         task->counter--;
-        std::cerr << this->taskid << " -> Task " << task->taskid << " counter at " << task->counter <<" name: "<<task->name <<" task type:"<< task->type<<std::endl;
+        //std::cerr << this->taskid << " -> Task " << task->taskid << " counter at " << task->counter <<" name: "<<task->name <<" task type:"<< task->type<<std::endl;
         
         if (task->counter == 0) {
             task->ready_time = finish_time;
@@ -2227,6 +2230,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
+            std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         else {
             flowSrc->is_elec = true;
@@ -2234,6 +2238,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_eps_volume[src_node] += flow_size;
             // Update EPS volume statistics (received)
             node_eps_recv_volume[dst_node] += flow_size;
+                std::cerr << "flow goes through EPS, update EPS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         // Update total volume statistics (sent)
         node_total_volume[src_node] += flow_size;
@@ -2330,13 +2335,33 @@ void finish_alltoall(void * a2ainfo) {
         std::cerr << "finish_alltoall_task "<< " total rounds "<< a2a_task->total_rounds << " intra node routing num "<< a2a->intra_node_routing << std::endl;
         a2a_task->finish_time = max(a2a_task->finish_time, a2a_task->eventlist().now());
         a2a_task->run_time = a2a_task->finish_time - a2a_task->start_time;
-        std::cerr << "alltoall timing task_id " << a2a_task->taskid
+        if(a2a_task->info.find("GROUP_BY forward") != std::string::npos) {
+        std::cerr << "group by alltoall timing task_id " << a2a_task->taskid
                   << " layer " << a2a_task->layer_id
+                  << " region " << (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size
                   << " micro_batch " << a2a_task->micro_batch_id
                   << " start " << a2a_task->start_time
                   << " finish " << a2a_task->finish_time
-                  << " duration " << a2a_task->run_time << std::endl;
+                  << " duration " << a2a_task->run_time << std::endl;}
+         else if(a2a_task->info.find("AGGREGATE forward") != std::string::npos) {
+                    std::cerr << "aggregate alltoall timing task_id " << a2a_task->taskid
+                  << " layer " << a2a_task->layer_id
+                  << " region " << (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size
+                  << " micro_batch " << a2a_task->micro_batch_id
+                  << " start " << a2a_task->start_time
+                  << " finish " << a2a_task->finish_time
+                  << " duration " << a2a_task->run_time << std::endl;}
+        else{std::cerr << " alltoall timing task_id " << a2a_task->taskid
+                  << " layer " << a2a_task->layer_id
+                  << " region " << (a2a_task->from_node_ids[0] / 8) / a2a_task->ffapp->topomanager->region_size
+                  << " micro_batch " << a2a_task->micro_batch_id
+                  << " start " << a2a_task->start_time
+                  << " finish " << a2a_task->finish_time
+                  << " duration " << a2a_task->run_time << std::endl;}
         a2a_task->cleanup();
+        if (FFApplication::debug_exit == a2a_task->layer_id) {
+            exit(0);
+        }
     }
 }
 

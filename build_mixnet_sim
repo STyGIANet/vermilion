@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd ~/mixnet-htsim/src/clos/datacenter || exit
+cd ~/vermilion/mixnet-htsim/src/clos/datacenter || exit
 make clean
 
 cd ../ || exit

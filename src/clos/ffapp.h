@@ -529,6 +529,9 @@ public:
 
     static int total_apps;
     static int finished_apps;
+    // If set to a non-negative layer id, exit(0) when that layer finishes.
+    // Wired from the `-debug` CLI arg in main.
+    static int debug_exit;
 
     std::vector<int> gpus;
     simtime_picosec final_finish_time;
