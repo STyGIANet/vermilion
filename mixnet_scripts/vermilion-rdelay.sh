@@ -2,7 +2,7 @@
 # RTT is in nanoseconds, periodic_interval_ns and rdelay are also in nanoseconds units
 declare -a bw=(100)
 declare -a microbatchsize=(8)
-declare -a rdelay=(1 10 50 100 500 1000)
+declare -a rdelay=(2000 3000 40000 50000 10000)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +13,7 @@ new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 DEBUG=5
 COMPILE=0
 
-# ── Timing analysis function ─────────────────────────────────────────────────
+
 analyze_timings() {
     local FOLDER="${1:-.}"
     local LOGFILE="$FOLDER/output_err.txt"
@@ -45,7 +45,8 @@ analyze_timings() {
 
     echo "  [timing analysis saved to $OUTFILE]"
 }
-# ─────────────────────────────────────────────────────────────────────────────
+
+
 
 summarize_rdelay() {
     local BASE_DIR="$1"
@@ -103,19 +104,19 @@ for algorithm in "vermilion" "mixnet" ; do
             for r in "${rdelay[@]}"; do
                 for workload in "${workloads[@]}"; do
                     DUMP_DIR=$LOG_DIR/vermilion-rdelay/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
-                    # # Note: r and periodic_interval are both in nanoseconds units
-                    # periodic_interval=$(python3 -c "print(max([$r * 10, 800]))")
-                    # mkdir -p $DUMP_DIR
-                    # cd "$ALG_DIR"
+                    # Note: r and periodic_interval are both in nanoseconds units
+                    periodic_interval=$(python3 -c "print(max([$r * 10, 800]))")
+                    mkdir -p $DUMP_DIR
+                    cd "$ALG_DIR"
 
-                    # if [[ $algorithm == "vermilion" ]]; then
-                    #     echo "Running Vermilion with periodic reconf interval $periodic_interval ns and rdelay $r ns"
-                    #     ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_ns $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt
-                    # elif [[ $algorithm == "mixnet" ]]; then
-                    #     echo "Running MixNet with rdelay $r ns"
-                    #     ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
-                    #  fi
-                    # # Run timing analysis and save results to $DUMP_DIR
+                    if [[ $algorithm == "vermilion" ]]; then
+                        echo "Running Vermilion with periodic reconf interval $periodic_interval ns and rdelay $r ns"
+                        ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_ns $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt
+                    elif [[ $algorithm == "mixnet" ]]; then
+                        echo "Running MixNet with rdelay $r ns"
+                        ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
+                     fi
+                    # Run timing analysis and save results to $DUMP_DIR
                     analyze_timings "$DUMP_DIR"
 
                 done

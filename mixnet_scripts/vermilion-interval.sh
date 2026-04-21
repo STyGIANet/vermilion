@@ -3,7 +3,7 @@
 declare -a bw=(100)
 declare -a microbatchsize=(8)
 declare -a rdelay=(1)
-declare -a interval=(800 1600 2400 3000 4000 5000 6000 7000 8000)
+declare -a interval=(100000000)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,10 +11,10 @@ REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 
-DEBUG=5
+DEBUG=1
 COMPILE=0
 
-# ── Timing analysis function ─────────────────────────────────────────────────
+
 analyze_timings() {
     local FOLDER="${1:-.}"
     local LOGFILE="$FOLDER/output_err.txt"
@@ -44,7 +44,7 @@ analyze_timings() {
 
     echo "  [timing analysis saved to $OUTFILE]"
 }
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 summarize_rdelay() {
     local BASE_DIR="$1"
@@ -78,7 +78,7 @@ summarize_rdelay() {
 }
 
 
-for algorithm in "vermilion" "mixnet"; do
+for algorithm in "vermilion" ; do
 
     if [[ $algorithm == "vermilion" ]]; then
         ALG_DIR="$REPO_DIR/src/clos/datacenter"

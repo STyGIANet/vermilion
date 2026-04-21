@@ -1,8 +1,8 @@
 #!/bin/bash
 # RTT is in nanoseconds, periodic_interval_ns and rdelay are also in nanoseconds units
-declare -a bw=(50 100 200 400 500 600 700 800)
+declare -a bw=(50 100 200 300 400 500 600 700 800)
 declare -a microbatchsize=(8)
-declare -a rdelay=(1 10 50)
+declare -a rdelay=(500 1000)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +13,6 @@ new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 DEBUG=5
 COMPILE=0
 
-# ── Timing analysis function ─────────────────────────────────────────────────
 analyze_timings() {
     local FOLDER="${1:-.}"
     local LOGFILE="$FOLDER/output_err.txt"
@@ -45,7 +44,7 @@ analyze_timings() {
 
     echo "  [timing analysis saved to $OUTFILE]"
 }
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 summarize_rdelay() {
     local BASE_DIR="$1"
@@ -78,7 +77,7 @@ summarize_rdelay() {
 
 
 
-for algorithm in "mixnet" ; do
+for algorithm in "vermilion" "mixnet" ; do
 
     if [[ $algorithm == "vermilion" ]]; then
         ALG_DIR="$REPO_DIR/src/clos/datacenter"
@@ -104,7 +103,7 @@ for algorithm in "mixnet" ; do
                 for workload in "${workloads[@]}"; do
                     DUMP_DIR=$LOG_DIR/vermilion-bw-rdelay/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
                     # Note: r and periodic_interval are both in nanoseconds units
-                    periodic_interval=$(python3 -c "print(max([$r * 10, 800]))")
+                    periodic_interval=$(python3 -c "print(max([$r * 10, 8000]))")
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
 

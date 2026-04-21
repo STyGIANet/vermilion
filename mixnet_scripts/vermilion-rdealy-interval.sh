@@ -2,8 +2,8 @@
 # RTT is in nanoseconds, periodic_interval_ns and rdelay are also in nanoseconds units
 declare -a bw=(100)
 declare -a microbatchsize=(8)
-declare -a rdelay=(1 10 50 100 500 1000)
-declare -a interval=(800 1600 2400 3000 4000 5000 6000 7000 8000)
+declare -a rdelay=(1000)
+declare -a interval=(10000 15000)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,7 +14,7 @@ new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 DEBUG=5
 COMPILE=0
 
-# ── Timing analysis function ─────────────────────────────────────────────────
+
 analyze_timings() {
     local FOLDER="${1:-.}"
     local LOGFILE="$FOLDER/output_err.txt"
@@ -44,7 +44,7 @@ analyze_timings() {
 
     echo "  [timing analysis saved to $OUTFILE]"
 }
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 summarize_rdelay() {
     local BASE_DIR="$1"
