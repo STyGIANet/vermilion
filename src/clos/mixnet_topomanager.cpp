@@ -31,6 +31,8 @@ extern uint32_t RTT;
 extern uint32_t SPEED;
 extern ofstream fct_util_out;
 
+uint32_t BVN=0;
+
 // static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
 
 All2AllTrafficRecorder::All2AllTrafficRecorder(int layer_num, int region_num, int region_size, TcpRtxTimerScanner *rtx_scanner)
@@ -228,6 +230,8 @@ void RegionalTopoManager::doNextEvent()
 
     if (periodic_reconf && !conn_cycle_ready)
     {
+      // if(BVN==1)
+      //   prepare_BVN();
       prepare_conn_cycle(); // Deeksha: Call this after matrix is ready before this TASK call for doNextEvent
     }
     
@@ -1450,7 +1454,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  // std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
+  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
   // for (int i = 0; i < region_size; i++) {
   //   for (int j = 0; j < region_size; j++) {
   //     std::cerr << conn[i][j] << " ";

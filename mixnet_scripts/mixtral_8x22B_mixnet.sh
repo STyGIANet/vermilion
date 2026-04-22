@@ -2,14 +2,14 @@
 # RTT is in nanoseconds, periodic_interval_ns and rdelay are also in nanoseconds units
 declare -a bw=(100)
 declare -a microbatchsize=(8)
-declare -a rdelay=(1000)
+declare -a rdelay=(1 1000)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
-DEBUG=0
+DEBUG=100
 COMPILE=0
 
 EXP=1
@@ -41,10 +41,10 @@ for algorithm in "vermilion" "mixnet";do
         for b in "${bw[@]}"; do
             for r in "${rdelay[@]}"; do
                 for workload in "${workloads[@]}"; do
-                    DUMP_DIR=$LOG_DIR/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
+                    DUMP_DIR=$LOG_DIR/Full/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
                     # Note: r and periodic_interval are both in nanoseconds units
                     #periodic_interval=$(python3 -c "print(max([$r * 10, 500000]))")
-                    periodic_interval=$(python3 -c "print(max([45000]))")
+                    periodic_interval=$(python3 -c "print(max([100000]))")
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
 
