@@ -146,6 +146,9 @@ int main(int argc, char **argv)
   int pp_degree;
   int ep_degree;
 
+  uint32_t link_speed = 100;
+  uint32_t elecspeed = 100;
+
   // stringstream filename(ios_base::out);
   int i = 1;
   // filename << "logout.dat";
@@ -301,6 +304,11 @@ int main(int argc, char **argv)
       FFApplication::debug_exit = debug;
       i++;
     }
+    else if (!strcmp(argv[i], "-elecspeed"))
+    {
+      elecspeed = atoi(argv[i + 1]);
+      i++;
+    }
     else
       exit_error(argv[0], argv[i]);
     i++;
@@ -371,7 +379,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-  uint32_t link_speed = SPEED*(8-alpha);
+  link_speed = elecspeed*(8-alpha);
   int fattree_nodenum = (no_of_nodes/8);// assume 8 NICs per node
   int fattree_node = find_nonum(fattree_nodenum);// find min k for no_of_nodes
 
