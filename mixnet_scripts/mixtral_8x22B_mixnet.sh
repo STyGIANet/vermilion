@@ -2,15 +2,15 @@
 # RTT is in nanoseconds, periodic_interval_ns and rdelay are also in nanoseconds units
 declare -a bw=(100)
 declare -a microbatchsize=(8)
-declare -a rdelay=(1 1000)
+declare -a rdelay=(1)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
-DEBUG=100
-COMPILE=0
+DEBUG=1
+COMPILE=1
 
 EXP=1
 N=0
