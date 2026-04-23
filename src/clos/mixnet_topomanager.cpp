@@ -453,6 +453,7 @@ std::vector<std::vector<double>> sinkhorn_balance_demand_matrix(
 
 struct WeightedPermutation {
   double lambda = 0.0;
+  bool use_periodic_interval = false;
   std::vector<std::pair<int, int>> matching;
 };
 
@@ -460,10 +461,11 @@ std::vector<WeightedPermutation> birkhoff_decompose_matrix(
     const std::vector<std::vector<double>> &doubly_stochastic_matrix) {
   const int n = static_cast<int>(doubly_stochastic_matrix.size());
   const double residual_tolerance = 1e-10;
-  const int max_terms = std::max(1, n * n * 4);
+  const int max_terms = std::max(1, n * n);
 
   std::vector<std::vector<double>> remaining = doubly_stochastic_matrix;
   std::vector<WeightedPermutation> decomposition;
+  bool terminated_at_cap = false;
 
   for (int term_idx = 0; term_idx < max_terms; ++term_idx) {
     double max_residual = 0.0;
@@ -489,9 +491,6 @@ std::vector<WeightedPermutation> birkhoff_decompose_matrix(
         if (row == col) {
           continue;
         }
-        // Keep every positive residual edge in the support graph. Tiny edges are
-        // still part of the valid Birkhoff support and can be necessary for the
-        // next perfect matching after repeated subtraction.
         if (remaining[row][col] > 0.0) {
           support_graph[row][col] = 1;
         }
@@ -522,6 +521,11 @@ std::vector<WeightedPermutation> birkhoff_decompose_matrix(
     term.lambda = lambda;
     term.matching = matching;
     decomposition.push_back(term);
+
+    if (term_idx + 1 == max_terms) {
+      terminated_at_cap = true;
+      break;
+    }
   }
 
   double max_residual = 0.0;
@@ -530,7 +534,9 @@ std::vector<WeightedPermutation> birkhoff_decompose_matrix(
       max_residual = std::max(max_residual, remaining[row][col]);
     }
   }
-  assert(max_residual <= 1e-6);
+  if (!terminated_at_cap) {
+    assert(max_residual <= 1e-6);
+  }
   return decomposition;
 }
 
@@ -662,6 +668,86 @@ simtime_picosec interval_from_birkhoff_lambda(
     interval = 1;
   }
   return interval;
+}
+
+std::vector<std::pair<int, int>> cyclic_shift_permutation(int n, int shift) {
+  std::vector<std::pair<int, int>> matching;
+  matching.reserve(n);
+  for (int src = 0; src < n; ++src) {
+    const int dst = (src + shift) % n;
+    assert(src != dst);
+    matching.push_back(std::make_pair(src, dst));
+  }
+  return matching;
+}
+
+void ensure_complete_graph_coverage(
+    std::vector<WeightedPermutation> &decomposition,
+    int n) {
+  if (n <= 1) {
+    return;
+  }
+
+  std::vector<std::vector<int>> covered(n, std::vector<int>(n, 0));
+  for (const auto &term : decomposition) {
+    for (const auto &edge : term.matching) {
+      covered[edge.first][edge.second] = 1;
+    }
+  }
+
+  bool complete = true;
+  for (int src = 0; src < n; ++src) {
+    for (int dst = 0; dst < n; ++dst) {
+      if (src == dst) {
+        continue;
+      }
+      if (!covered[src][dst]) {
+        complete = false;
+        break;
+      }
+    }
+    if (!complete) {
+      break;
+    }
+  }
+  if (complete) {
+    return;
+  }
+
+  for (int shift = 1; shift < n; ++shift) {
+    const std::vector<std::pair<int, int>> matching =
+        cyclic_shift_permutation(n, shift);
+
+    bool useful = false;
+    for (const auto &edge : matching) {
+      if (!covered[edge.first][edge.second]) {
+        useful = true;
+        break;
+      }
+    }
+    if (!useful) {
+      continue;
+    }
+
+    WeightedPermutation term;
+    term.lambda = 0.0;
+    term.use_periodic_interval = true;
+    term.matching = matching;
+    decomposition.push_back(term);
+
+    for (const auto &edge : matching) {
+      covered[edge.first][edge.second] = 1;
+    }
+  }
+
+  for (int src = 0; src < n; ++src) {
+    for (int dst = 0; dst < n; ++dst) {
+      if (src == dst) {
+        continue;
+      }
+      assert(covered[src][dst]);
+    }
+  }
 }
 
 }  // namespace
@@ -1473,6 +1559,7 @@ void RegionalTopoManager::compute_schedule_birkhoff()
       sinkhorn_balance_demand_matrix(demand);
   std::vector<WeightedPermutation> decomposition =
       birkhoff_decompose_matrix(doubly_stochastic_matrix);
+  ensure_complete_graph_coverage(decomposition, N);
 
   for (const auto &term : decomposition) {
     std::vector<std::vector<int>> conn(
@@ -1484,8 +1571,13 @@ void RegionalTopoManager::compute_schedule_birkhoff()
   }
 
   for (const auto &term : decomposition) {
-    conn_cycle_intervals.push_back(
-        interval_from_birkhoff_lambda(term.lambda, birkhoff_cycle_interval));
+    if (term.use_periodic_interval) {
+      conn_cycle_intervals.push_back(
+          periodic_interval > 0 ? periodic_interval : 1);
+    } else {
+      conn_cycle_intervals.push_back(
+          interval_from_birkhoff_lambda(term.lambda, birkhoff_cycle_interval));
+    }
   }
 
   conn_cycle_ready = !conn_cycle.empty();

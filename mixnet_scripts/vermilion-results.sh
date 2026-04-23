@@ -18,8 +18,8 @@ N=0
 ELEC_BW=400
 
 NCORE=100
-
-for algorithm in "vermilion" "birkhoff";do
+echo "algorithm bw rdelay workload time"
+for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
     for mb in "${microbatchsize[@]}"; do
         for b in "${bw[@]}"; do
             for r in "${rdelay[@]}"; do
