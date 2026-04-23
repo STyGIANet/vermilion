@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
-DEBUG=10
+DEBUG=4
 COMPILE=1
 
 EXP=1
@@ -52,15 +52,14 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
 
-                    sleep 2
                     while [[ $(ps aux | grep "htsim_tcp_mixnet" | wc -l) -gt $NCORE ]];do
                         echo "Waiting for cpu cores.... $N-th experiment "
-                        sleep 10
+                        sleep 2
                     done
                     
+                    echo "Running $algorithm with rdelay $r ns, bw $b workload $workload experiment Id $N"
                     if [[ $EXP == 1 ]];then
                         if [[ $algorithm == "vermilion" || $algorithm == "rotor" || $algorithm == "birkhoff" ]];then
-                            echo "Running $algorithm with periodic reconf interval $periodic_interval ns and rdelay $r ns"
                             time ( 
                             ./htsim_tcp_mixnet -algorithm $algorithm -debug $DEBUG -simtime 360000.1 \
                             -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf \
@@ -84,7 +83,6 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
                             -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt; echo "$DUMP_DIR finished...")&
                         
                         elif [[ $algorithm == "mixnet" ]];then
-                            echo "Running MixNet with rdelay $r ns"
                             time (./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 \
                             -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf \
                             -speed $((b*1000)) \
@@ -114,7 +112,7 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
 done
 
 while [[ $(ps aux | grep "htsim_tcp_mixnet" | wc -l) -gt $NCORE ]];do
-    echo "Waiting for cpu cores.... $N-th experiment "
+    echo "Waiting for experiments to finish.... Total $N "
     sleep 10
 done
 
