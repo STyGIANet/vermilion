@@ -2,7 +2,7 @@
 # RTT is in nanoseconds, periodic_interval_ns and rdelay are also in nanoseconds units
 declare -a bw=(50 100 200 300 400 500 600 700 800)
 declare -a microbatchsize=(8)
-declare -a rdelay=(500 1000)
+declare -a rdelay=(1 10 50 500 1000)
 declare -a workloads=("num_global_tokens_per_expert")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -107,13 +107,13 @@ for algorithm in "vermilion" "mixnet" ; do
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
 
-                    if [[ $algorithm == "vermilion" ]]; then
-                        echo "Running Vermilion with periodic reconf interval $periodic_interval ns and rdelay $r ns"
-                        ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_ns $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt
-                    elif [[ $algorithm == "mixnet" ]]; then
-                        echo "Running MixNet with rdelay $r ns"
-                        ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
-                     fi
+                    # if [[ $algorithm == "vermilion" ]]; then
+                    #     echo "Running Vermilion with periodic reconf interval $periodic_interval ns and rdelay $r ns"
+                    #     ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_ns $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt
+                    # elif [[ $algorithm == "mixnet" ]]; then
+                    #     echo "Running MixNet with rdelay $r ns"
+                    #     ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
+                    #  fi
                     # Run timing analysis and save results to $DUMP_DIR
                     analyze_timings "$DUMP_DIR"
 

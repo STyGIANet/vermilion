@@ -14,6 +14,7 @@ from collections import defaultdict
 # import gurobipy as gp
 # from gurobipy import GRB
 import copy
+import os 
 
 #%%
 
@@ -68,7 +69,7 @@ k_s = [8]
 # "traffic_matrix_layer01_pass0004",
 # "traffic_matrix_layer01_pass0005", ]
 
-matrices = ["mixtral"]
+matrices = ["mixtral", "mixtral_2", "deepseek", "qwen", "qwen_128", "Phi-3.5-MoE-instruct-gsm8k","Phi-3.5-MoE-instruct-mmlu"]
 #matrices = ["matrix"]
 #%%
 def decompose_into_perfect_matchings(Gx, N):
@@ -222,7 +223,7 @@ guard_band = int(guard_band*(10**6)) # in picoseconds
 slottime = (reconf + guard_band)*9
 
 for matrix in matrices:
-    loaded_demand = np.loadtxt(matrix+".txt", usecols=range(N))
+    loaded_demand = np.loadtxt(os.path.join("matrices",matrix+".txt"), usecols=range(N))
     np.fill_diagonal(loaded_demand, 0)
     eps = 1e-5
     loaded_demand[loaded_demand < eps] = 0

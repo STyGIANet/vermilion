@@ -2389,7 +2389,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
-            //std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+            std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
         }
         else {
             //Add tje flow to ocs but pause the flow immediately, we will resume the flow after reconfig
@@ -2399,7 +2399,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
             node_ocs_volume[src_node] += flow_size;
             // Update OCS volume statistics (received)
             node_ocs_recv_volume[dst_node] += flow_size;
-                //std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
+                std::cerr << "flow goes through OCS, update OCS volume statistics: src_node " << src_gpu << " dst_node " << dst_gpu << " flow_size " << flow_size << "flow id " << this->taskid << std::endl;
             // flowSrc->pause_flow_in_region();        //Deeksha: Pausing the flow that does not have any connection
                 // flowSrc->is_elec = true;
             // // Update EPS volume statistics (sent)

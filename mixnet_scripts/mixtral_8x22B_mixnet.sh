@@ -11,7 +11,7 @@ REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
 new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 DEBUG=5
-COMPILE=0
+COMPILE=1
 
 EXP=1
 N=0
@@ -44,7 +44,7 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
         for b in "${bw[@]}"; do
             for r in "${rdelay[@]}"; do
                 for workload in "${workloads[@]}"; do
-                    DUMP_DIR=$LOG_DIR/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
+                    DUMP_DIR=$LOG_DIR/Full/mixtral8x22B_${mb}_mixnet_${b}_${workload}_${r}_${algorithm}
                     # Note: r and periodic_interval are both in nanoseconds units
                     periodic_interval=$(python3 -c "print(max([$r * 99, 800]))")
                     # periodic_interval=$(python3 -c "print(max([45000]))")
