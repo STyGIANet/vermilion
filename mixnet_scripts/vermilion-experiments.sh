@@ -45,7 +45,7 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
         for b in "${bw[@]}"; do
             for r in "${rdelay[@]}"; do
                 for workload in "${workloads[@]}"; do
-                    DUMP_DIR=$LOG_DIR/Full/workload_${mb}_${b}_${workload}_${r}_${algorithm}
+                    DUMP_DIR=$LOG_DIR/workload_${mb}_${b}_${workload}_${r}_${algorithm}
                     # Note: r and periodic_interval are both in nanoseconds units
                     periodic_interval=$(python3 -c "print(max([$r * 10, 800]))")
                     # periodic_interval=$(python3 -c "print(max([45000]))")

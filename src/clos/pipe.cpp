@@ -10,7 +10,7 @@ Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
 : EventSource(eventlist,"pipe"), _delay(delay)
 {
     stringstream ss;
-    std::cout << "pipe(" << delay/1000000.0 << "us)" << " " << delay << std::endl;
+    // std::cout << "pipe(" << delay/1000000.0 << "us)" << " " << delay << std::endl;
     ss << "pipe(" << delay/1000000 << "us)";
     _nodename= ss.str();
 
@@ -51,10 +51,10 @@ void Pipe::doNextEvent() {
     if (_inflight.size() == 0) 
 	return;
 
-    std::cout << "[Pipe] before pop size=" << _inflight.size() << " next_delivery=" << _inflight.back().first << std::endl;
+    // std::cout << "[Pipe] before pop size=" << _inflight.size() << " next_delivery=" << _inflight.back().first << std::endl;
     Packet *pkt = _inflight.back().second;
     _inflight.pop_back();
-    std::cout << "[Pipe] after pop size=" << _inflight.size() << std::endl;
+    // std::cout << "[Pipe] after pop size=" << _inflight.size() << std::endl;
     pkt->flow().logTraffic(*pkt, *this,TrafficLogger::PKT_DEPART);
 
 

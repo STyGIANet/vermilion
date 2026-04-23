@@ -817,8 +817,10 @@ void All2AllTrafficRecorder::dump_all_traffic_matrices(int layer_id, int region_
         continue; // skip uninitialized matrices
       }
       // traffic_matrix[layer_id][region_id]->copy_from(tm);  //traffic matric is already copied in append function
-      std::cout << "Traffic matrix for layer " << l << " region " << r << ":" << std::endl;
-      traffic_matrix[l][r]->print_mat();
+      
+      // removing the print for now, need to remove the call in the first place.
+      // std::cout << "Traffic matrix for layer " << l << " region " << r << ":" << std::endl;
+      // traffic_matrix[l][r]->print_mat();
     }
   }
 }
@@ -929,7 +931,7 @@ void RegionalTopoManager::do_reconf()
         continue;
       Queue *q = topo->queues[i][j];
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
-      std::cout << "reconfFired" << std::endl;
+      // std::cout << "reconfFired" << std::endl;
       // if (eq->queuesize() > 0)
       // {
       //   // eq->_state_send = LosslessQueue::PAUSE_RECEIVED;
@@ -1438,17 +1440,17 @@ void RegionalTopoManager::compute_schedule_vermilion()
   conn_cycle_idx = 0;
   active_conn_cycle_interval = conn_cycle_intervals.empty() ? periodic_interval
                                                             : conn_cycle_intervals[0];
-  std::cout << "Conn cycle initialized from demand matrix with "
-            << conn_cycle.size()
-            << " connection matrices and "
-            << conn_cycle_intervals.size()
-            << " interval entries."
-            << " cycle_interval_ps " << vermilion_cycle_interval
-            << " algorithm " << conn_cycle_algorithm_name(conn_cycle_algorithm)
-            << " reverse: " << reverse
-            << " layer " << current_layer_id
-            << " region " << region_id
-            << " time " << eventlist.now() << std::endl;
+  // std::cout << "Conn cycle initialized from demand matrix with "
+  //           << conn_cycle.size()
+  //           << " connection matrices and "
+  //           << conn_cycle_intervals.size()
+  //           << " interval entries."
+  //           << " cycle_interval_ps " << vermilion_cycle_interval
+  //           << " algorithm " << conn_cycle_algorithm_name(conn_cycle_algorithm)
+  //           << " reverse: " << reverse
+  //           << " layer " << current_layer_id
+  //           << " region " << region_id
+  //           << " time " << eventlist.now() << std::endl;
 }
 
 void RegionalTopoManager::compute_schedule_birkhoff()
@@ -1490,17 +1492,17 @@ void RegionalTopoManager::compute_schedule_birkhoff()
   conn_cycle_idx = 0;
   active_conn_cycle_interval = conn_cycle_intervals.empty() ? periodic_interval
                                                             : conn_cycle_intervals[0];
-  std::cout << "Conn cycle initialized from demand matrix with "
-            << conn_cycle.size()
-            << " connection matrices and "
-            << conn_cycle_intervals.size()
-            << " interval entries."
-            << " cycle_interval_ps " << birkhoff_cycle_interval
-            << " algorithm " << conn_cycle_algorithm_name(conn_cycle_algorithm)
-            << " reverse: " << reverse
-            << " layer " << current_layer_id
-            << " region " << region_id
-            << " time " << eventlist.now() << std::endl;
+  // std::cout << "Conn cycle initialized from demand matrix with "
+  //           << conn_cycle.size()
+  //           << " connection matrices and "
+  //           << conn_cycle_intervals.size()
+  //           << " interval entries."
+  //           << " cycle_interval_ps " << birkhoff_cycle_interval
+  //           << " algorithm " << conn_cycle_algorithm_name(conn_cycle_algorithm)
+  //           << " reverse: " << reverse
+  //           << " layer " << current_layer_id
+  //           << " region " << region_id
+  //           << " time " << eventlist.now() << std::endl;
 }
 
 // Deeksha: Update conn cycle as per the selected adjacency matrix generation algorithm
@@ -2365,15 +2367,15 @@ void RegionalTopoManager::rotor_conn_cycle()
   conn_cycle_ready = !conn_cycle.empty();
   conn_cycle_idx = 0;
   active_conn_cycle_interval = periodic_interval;
-  std::cout << "Rotor conn cycle initialized with "
-            << conn_cycle.size()
-            << " connection matrices."
-            << " cycle_size " << cycle_size
-            << " alpha " << alpha
-            << " reverse: " << reverse
-            << " layer " << current_layer_id
-            << " region " << region_id
-            << " time " << eventlist.now() << std::endl;
+  // std::cout << "Rotor conn cycle initialized with "
+  //           << conn_cycle.size()
+  //           << " connection matrices."
+  //           << " cycle_size " << cycle_size
+  //           << " alpha " << alpha
+  //           << " reverse: " << reverse
+  //           << " layer " << current_layer_id
+  //           << " region " << region_id
+  //           << " time " << eventlist.now() << std::endl;
 }
 
 
