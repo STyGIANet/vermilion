@@ -5,6 +5,8 @@ declare -a microbatchsize=(8)
 declare -a rdelay=(10 100 500 1000 10000 100000 1000000 10000000)
 declare -a workloads=("num_global_tokens_per_expert" "mixtral" "deepseek" "mixtral_2" "Phi-3.5-MoE-instruct-gsm8k" "Phi-3.5-MoE-instruct-mmlu" "qwen" "qwen_128")
 
+ALGS=("birkhoff" "vermilion" "rotor" "mixnet")
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname $SCRIPT_DIR)"
 LOG_DIR="$REPO_DIR/logs"
@@ -19,7 +21,7 @@ ELEC_BW=400
 
 NCORE=100
 
-for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
+for algorithm in ${ALGS[@]};do
    
     
     if [[  $algorithm == "vermilion" || $algorithm == "rotor" || $algorithm == "birkhoff" ]];then
@@ -99,7 +101,7 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
                             -ep_degree 8 \
                             -rdelay $r \
                             -elecspeed $((ELEC_BW*1000)) \
-                            -weightmatrix ../../../test/${workload}.txt \
+                            -weightmatrix $REPO_DIR/test/${workload}.txt \
                             -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt ; echo "$DUMP_DIR finished...")&
                         fi
                     

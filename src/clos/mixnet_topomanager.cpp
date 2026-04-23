@@ -2396,7 +2396,7 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
   
   // update the conn of the topo
   // Debug print for conn matrix
-  std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
+  // std::cerr << "Debug - Conn matrix for region " << region_id << " layer " << current_layer_id << ":" << "conn index: " << conn_cycle_idx << "conn matrix size: " << conn_cycle.size() << " region_size: " << region_size << std::endl;
   // for (int i = 0; i < region_size; i++) {
   //   for (int j = 0; j < region_size; j++) {
   //     std::cerr << conn[i][j] << " ";
