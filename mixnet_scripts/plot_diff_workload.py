@@ -169,14 +169,23 @@ for workload in workloads:
     for alg in algs:
         if alg == "vermilion":
             continue
-        arr = np.zeros((len(rdelays),len(bandwidths)))
+        # if workload != "deepseek":
+        #     continue
+        arr = np.zeros((len(bandwidths),len(rdelays)))
         dfalg = df[(df["workload"]==workload)&(df["algorithm"]==alg)]
         dfverm = df[(df["workload"]==workload)&(df["algorithm"]=="vermilion")]
-        for i in range(len(rdelays)):
-            for j in range(len(bandwidths)):
-                algtime = list(dfalg[(dfalg["rdelay"]==rdelays[i])&(dfalg["bw"]==bandwidths[j])]["time"])[0]
-                vermtime = list(dfverm[(dfverm["rdelay"]==rdelays[i])&(dfverm["bw"]==bandwidths[j])]["time"])[0]
+        for j in range(len(rdelays)):
+            for i in range(len(bandwidths)):
+                algtime = list(dfalg[(dfalg["rdelay"]==rdelays[j])&(dfalg["bw"]==bandwidths[i])]["time"])[0]
+                vermtime = list(dfverm[(dfverm["rdelay"]==rdelays[j])&(dfverm["bw"]==bandwidths[i])]["time"])[0]
                 arr[i][j]=algtime/vermtime
+                print(algtime,vermtime,alg,workload, rdelays[j], bandwidths[i])
+        
+        print("###############")
+        print(workload, alg)
+        for row in arr:
+            print(" ".join(f"{x:.4f}" for x in row))
+        print("")
         
         fig,ax = plt.subplots(1,1, figsize=(8,7))
         
