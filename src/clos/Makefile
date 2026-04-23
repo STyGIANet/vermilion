@@ -1,4 +1,4 @@
-OBJS=eventlist.o tcppacket.o pipe.o queue.o queue_lossless.o queue_lossless_input.o queue_lossless_output.o ecnqueue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o qcn.o exoqueue.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o eth_pause_packet.o compositequeue.o prioqueue.o cpqueue.o compositeprioqueue.o switch.o fairpullqueue.o route.o ffapp.o dyn_net_sch.o mixnet_topomanager.o#taskgraph.pb.o
+OBJS=eventlist.o tcppacket.o pipe.o queue.o queue_lossless.o queue_lossless_input.o queue_lossless_output.o ecnqueue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o qcn.o exoqueue.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o eth_pause_packet.o compositequeue.o prioqueue.o cpqueue.o compositeprioqueue.o switch.o fairpullqueue.o route.o ffapp.o dyn_net_sch.o mixnet_topomanager.o # datacenter/mixnet.o stays out of libhtsim.a; mixnet mains link it separately
 
 HDRS=network.h ndp.h queue_lossless.h queue_lossless_input.h queue_lossless_output.h compositequeue.h prioqueue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h tcp.h dctcp.h mtcp.h sent_packets.h tcppacket.h ndppacket.h eth_pause_packet.h compositeprioqueue.h ecnqueue.h switch.h ffapp.h taskgraph_generated.h dyn_net_sch.h mixnet_topomanager.h #taskgraph.pb.h
 #USE_GUROBI = 1
@@ -35,7 +35,7 @@ lib:	$(OBJS) $(HDRS)
 # 	$(CC) $(CFLAGS) $(OBJS) main.o -o htsim
 
 clean:	
-	rm -f *.o htsim htsim_* libhtsim.a
+	rm -f *.o datacenter/*.o htsim htsim_* libhtsim.a
 parse_output.o: parse_output.cpp libhtsim.a
 config.o:	config.cpp config.h
 switch.o: 	switch.cpp switch.h
@@ -70,6 +70,8 @@ ffapp.o: ffapp.cpp ffapp.h $(HDRS)
 taskgraph.pb.o: taskgraph.pb.cc taskgraph.pb.h $(HDRS)
 dyn_net_sch.o: dyn_net_sch.cpp $(HDRS)
 mixnet_topomanager.o: mixnet_topomanager.cpp $(HDRS)
+datacenter/mixnet.o: datacenter/mixnet.cpp datacenter/mixnet.h $(HDRS)
+	$(CC) $(CFLAGS) -Wuninitialized -c -o $@ $<
 
 .cpp.o:
 	source='$<' object='$@' libtool=no depfile='$(DEPDIR)/$*.Po' tmpdepfile='$(DEPDIR)/$*.TPo' $(CXXDEPMODE) $(depcomp) $(CC) $(CFLAGS) -Wuninitialized  -c -o $@ `test -f $< || echo '$(srcdir)/'`$<

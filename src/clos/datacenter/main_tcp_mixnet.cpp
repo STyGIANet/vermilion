@@ -152,8 +152,12 @@ int main(int argc, char **argv)
   //Deeksha: for periodic reconf`iguration
   bool periodic_reconf = true;
   float periodic_interval_ns = 0.0005;
+  MixnetConnCycleAlgorithm conn_cycle_algorithm = CONN_CYCLE_VERMILION;
 
   int debug = 0;
+
+  uint32_t link_speed = 100;
+  uint32_t elecspeed = 100;
 
   // stringstream filename(ios_base::out);
   int i = 1;
@@ -219,6 +223,29 @@ int main(int argc, char **argv)
     {
       periodic_interval_ns = std::atof(argv[i + 1]);
       cout << "periodic_interval_ns " << periodic_interval_ns << endl;
+      i++;
+    }
+    else if (!strcmp(argv[i], "-conn_cycle_algorithm") || !strcmp(argv[i], "-algorithm"))
+    {
+      if (!strcmp(argv[i + 1], "vermilion"))
+      {
+        conn_cycle_algorithm = CONN_CYCLE_VERMILION;
+      }
+      else if (!strcmp(argv[i + 1], "rotor"))
+      {
+        conn_cycle_algorithm = CONN_CYCLE_ROTOR;
+      }
+      else if (!strcmp(argv[i + 1], "birkhoff"))
+      {
+        conn_cycle_algorithm = CONN_CYCLE_BIRKHOFF;
+      }
+      else
+      {
+        std::cerr << "Unknown algorithm: " << argv[i + 1]
+                  << ". Supported values: vermilion, rotor, birkhoff" << std::endl;
+        exit(1);
+      }
+      cout << "algorithm " << argv[i + 1] << endl;
       i++;
     }
     else if (!strcmp(argv[i], "-ssthresh"))
@@ -386,6 +413,11 @@ int main(int argc, char **argv)
       FFApplication::debug_exit = debug;
       i++;
     }
+    else if (!strcmp(argv[i], "-elecspeed"))
+    {
+      elecspeed = atoi(argv[i + 1]);
+      i++;
+    }
     else
       exit_error(argv[0], argv[i]);
     i++;
@@ -456,7 +488,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-  uint32_t link_speed = SPEED*(8-alpha);
+  link_speed = elecspeed*(8-alpha);
   int fattree_nodenum = (no_of_nodes/8);// assume 8 NICs per node
   int fattree_node = find_nonum(fattree_nodenum);// find min k for no_of_nodes
 
@@ -472,6 +504,11 @@ int main(int argc, char **argv)
   std::cout << "reconf_delay: " << reconf_delay << std::endl;
   std::cout << "periodic_reconf: " << periodic_reconf << std::endl;     //Deeksha: for periodic reconfiguration
   std::cout << "periodic_interval_ns: " << periodic_interval_ns; //(periodic_interval_ns < 0 ? reconf_delay : periodic_interval_ns) << std::endl;
+  std::cout << "conn_cycle_algorithm: "
+            << (conn_cycle_algorithm == CONN_CYCLE_ROTOR ? "rotor"
+                : (conn_cycle_algorithm == CONN_CYCLE_BIRKHOFF ? "birkhoff"
+                                                               : "vermilion"))
+            << std::endl;
   std::cout << "dp_degree: " << dp_degree << std::endl;
   std::cout << "tp_degree: " << tp_degree << std::endl;
   std::cout << "pp_degree: " << pp_degree << std::endl;
@@ -493,7 +530,7 @@ int main(int argc, char **argv)
   Mixnet *topo = new Mixnet(no_of_nodes, queuesize, nullptr /* &logfile */, eventlist, ff, ECN, 1000ULL * reconf_delay, fattree, alpha,dp_degree,tp_degree,pp_degree,ep_degree);
   int periodic_interval_ns_effective = periodic_interval_ns;
   //int periodic_interval_ns_effective = (periodic_interval_ns < 0 ? reconf_delay : periodic_interval_ns);
-  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000ULL * reconf_delay, eventlist, periodic_reconf, 1000ULL * periodic_interval_ns_effective);
+  MixnetTopoManager *topomanager = new MixnetTopoManager(topo, &demandrecorder, 1000ULL * reconf_delay, eventlist, periodic_reconf, 1000ULL * periodic_interval_ns_effective, conn_cycle_algorithm);
   
   FFApplication app = FFApplication(topo, ssthresh, logdir, &fct_util_out_ocs, tcpRtxScanner, eventlist, FFApplication::FF_DEFAULT_AR,1,&fct_util_out_ecs, topomanager);
   

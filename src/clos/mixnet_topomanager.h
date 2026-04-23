@@ -34,6 +34,12 @@ using namespace std;
 
 class TcpRtxTimerScanner;
 
+enum MixnetConnCycleAlgorithm {
+  CONN_CYCLE_VERMILION = 0,
+  CONN_CYCLE_ROTOR = 1,
+  CONN_CYCLE_BIRKHOFF = 2
+};
+
 struct All2AllTrafficRecorder {
   All2AllTrafficRecorder(int layer_num, int region_num, int region_size, TcpRtxTimerScanner * rtx_scanner);
   void append_traffic_matrix(int layer_id, int region_id, Matrix2D<double> & tm);
@@ -59,7 +65,7 @@ public:
     TOPO_RECONF,
     TOPO_WAIT_DRAIN
   };
-  RegionalTopoManager(Mixnet* topo, All2AllTrafficRecorder* demandrecorder, simtime_picosec refonc_delay, EventList & eventlist, int region_id, bool periodic_reconf = false, simtime_picosec periodic_interval = 0);
+  RegionalTopoManager(Mixnet* topo, All2AllTrafficRecorder* demandrecorder, simtime_picosec refonc_delay, EventList & eventlist, int region_id, bool periodic_reconf = false, simtime_picosec periodic_interval = 0, MixnetConnCycleAlgorithm conn_cycle_algorithm = CONN_CYCLE_VERMILION);
   virtual void doNextEvent();
   void start_reconf();
   void finish_reconf();
@@ -75,8 +81,11 @@ public:
   bool is_in_region(TcpSrc* tcpsrc) const;
   std::vector<std::vector<int>> regional_topo_reconfig();
   std::vector<std::vector<int>> rotor_reconfig();
-   void prepare_conn_cycle();
-   void rotor_conn_cycle();
+  void prepare_conn_cycle();
+  void compute_schedule_vermilion();
+  void compute_schedule_birkhoff();
+  void rotor_conn_cycle();
+  bool use_rotor_paths() const;
   bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
   int nnodes;
   int region_size;
@@ -99,10 +108,13 @@ public:
   simtime_picosec reconfig_end_time;
   bool periodic_reconf;
   simtime_picosec periodic_interval;
+  MixnetConnCycleAlgorithm conn_cycle_algorithm;
   bool conn_cycle_ready = false;
   bool conn_cycle_ready_2 = false;
   std::vector<std::vector<std::vector<int>>> conn_cycle;
+  std::vector<simtime_picosec> conn_cycle_intervals;
   size_t conn_cycle_idx = 0;
+  simtime_picosec active_conn_cycle_interval = 0;
   TopoStatus status;
   EventList & eventlist;
   All2AllTrafficRecorder * demandrecorder;
@@ -118,7 +130,7 @@ public:
 
 class MixnetTopoManager {
 public:
-  MixnetTopoManager(Mixnet* topo, All2AllTrafficRecorder* demandrecorder, simtime_picosec refonc_delay, EventList & eventlist, bool periodic_reconf = false, simtime_picosec periodic_interval = 0);
+  MixnetTopoManager(Mixnet* topo, All2AllTrafficRecorder* demandrecorder, simtime_picosec refonc_delay, EventList & eventlist, bool periodic_reconf = false, simtime_picosec periodic_interval = 0, MixnetConnCycleAlgorithm conn_cycle_algorithm = CONN_CYCLE_VERMILION);
   vector<RegionalTopoManager*> regional_topo_managers;
   int nnodes;
   int region_size;
@@ -128,6 +140,7 @@ public:
   simtime_picosec reconf_delay;
   bool periodic_reconf;
   simtime_picosec periodic_interval;
+  MixnetConnCycleAlgorithm conn_cycle_algorithm;
   All2AllTrafficRecorder * demandrecorder;
   void transpose(int regionId){
     regional_topo_managers[regionId]->reverse = (regional_topo_managers[regionId]->reverse + 1)%2;

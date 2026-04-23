@@ -45,7 +45,9 @@ public:
   void init_network();
 
   virtual vector<const Route*>* get_paths(int src, int dest);
+  virtual vector<const Route*>* get_two_hop_paths(int src, int dest);
   virtual vector<const Route*>* get_eps_paths(int src, int dest); 
+  bool has_two_hop_path(int src_gpu_idx, int dest_gpu_idx) const;
 
   Pipe * get_pipe(int src, int dst) { return pipes[src][dst]; };
   Queue* alloc_queue(QueueLogger* q, uint64_t speed, mem_b queuesize);
@@ -86,6 +88,5 @@ private:
 };
 
 #endif // MIXNET_H
-
 
 

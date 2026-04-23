@@ -57,8 +57,10 @@ EventList::cancelPendingSource(EventSource &src) {
     pendingsources_t::iterator i = _pendingsources.begin();
     while (i != _pendingsources.end()) {
 	if (i->second == &src) {
-	    _pendingsources.erase(i);
-	    return;
+	    pendingsources_t::iterator erase_me = i;
+	    i++;
+	    _pendingsources.erase(erase_me);
+	    continue;
 	}
 	i++;
     }

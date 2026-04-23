@@ -12,6 +12,7 @@
 ////////////////////////////////////////////////////////////////
 DemandRecorder *TcpSrc::demand_recorder = nullptr;
 bool TcpSrc::tcp_flow_paused = false;
+static const uint32_t ROTOR_TWO_HOP_DUPACK_TH = 1000000000U;
 
 TcpSrc::TcpSrc(TcpLogger *logger, TrafficLogger *pktlogger, ofstream *_fstream_out,
 							 EventList &eventlist, int flow_src, int flow_dst,
@@ -53,11 +54,9 @@ TcpSrc::TcpSrc(TcpLogger *logger, TrafficLogger *pktlogger, ofstream *_fstream_o
 	_mSrc = NULL;
 	_drops = 0;
 
-#ifdef PACKET_SCATTER
 	_crt_path = 0;
 	DUPACK_TH = 3;
 	_paths = NULL;
-#endif
 
 	_old_route = NULL;
 	_last_packet_with_old_route = 0;
@@ -80,25 +79,36 @@ TcpSrc::~TcpSrc()
 	{
 		delete _old_route;
 	}
-	// if (_mSrc) {
-	//    delete _mSrc;
-	// }
-#ifdef PACKET_SCATTER
-	if (_paths)
-	{
-		for (Route *r : _paths)
-		{
-			delete r;
-		}
-		delete _paths;
-	}
-#endif
+	clear_paths();
 }
 
-#ifdef PACKET_SCATTER
-void TcpSrc::set_paths(vector<const Route *> *rt)
+void TcpSrc::clear_paths()
 {
-	// this should only be used with route
+	if (_paths)
+	{
+		// Do not free the old Route objects here.
+		// Packets carry raw Route* pointers, and during periodic reconfiguration
+		// we pause queues but do not drain queue backlog. Older queued packets can
+		// still be referencing these Route objects after a path update.
+		// for (const Route *r : *_paths)
+		// {
+		// 	delete r;
+		// }
+		delete _paths;
+		_paths = NULL;
+	}
+	_scatter_random_paths = false;
+	_crt_path = 0;
+	DUPACK_TH = 3;
+}
+
+void TcpSrc::set_paths(vector<const Route *> *rt, bool randomize)
+{
+	clear_paths();
+	if (!rt || rt->empty())
+	{
+		return;
+	}
 	_paths = new vector<const Route *>();
 
 	for (unsigned int i = 0; i < rt->size(); i++)
@@ -107,10 +117,17 @@ void TcpSrc::set_paths(vector<const Route *> *rt)
 		t->push_back(_sink);
 		_paths->push_back(t);
 	}
-	DUPACK_TH = 3 + rt->size();
-	cout << "Setting DUPACK TH to " << DUPACK_TH << endl;
+	_scatter_random_paths = randomize;
+	if (randomize)
+	{
+		DUPACK_TH = ROTOR_TWO_HOP_DUPACK_TH;
+	}
+	else
+	{
+		DUPACK_TH = 3;
+		// DUPACK_TH = 3 + rt->size();
+	}
 }
-#endif
 
 void TcpSrc::set_flowsize(uint64_t flow_size_in_bytes)
 {
@@ -425,11 +442,7 @@ void TcpSrc::receivePacket(Packet &pkt)
 	// Not yet in fast recovery. What should we do instead?
 	_dupacks++;
 
-#ifdef PACKET_SCATTER
 	if (_dupacks != DUPACK_TH)
-#else
-	if (_dupacks != 3)
-#endif
 	{ // not yet serious worry
 		if (_logger)
 			_logger->logTcp(*this, TcpLogger::TCP_RCV_DUP);
@@ -611,27 +624,28 @@ void TcpSrc::send_packets()
 			//      cout << "Transmit packet on " << _flow.id << " " << _highest_sent+1 << "[" << data_seq << "] packets in flight " << _sent_packets.crt_count << " diff " << (_highest_sent+_mss-_last_acked)/1000 << " last_acked " << _last_acked << " at " << timeAsMs(eventlist().now()) << endl;
 #endif
 
-#ifdef PACKET_SCATTER
-		TcpPacket *p;
-
 		if (_paths)
 		{
-
-#ifdef RANDOM_PATH
-			_crt_path = random() % _paths->size();
-#endif
-
-			p = TcpPacket::newpkt(_flow, *(_paths->at(_crt_path)), _highest_sent + 1,
+			if (_scatter_random_paths)
+			{
+				_crt_path = random() % _paths->size();
+			}
+			TcpPacket *p = TcpPacket::newpkt(_flow, *(_paths->at(_crt_path)), _highest_sent + 1,
 														data_seq, _mss);
 			_crt_path = (_crt_path + 1) % _paths->size();
+			p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
+			p->set_ts(eventlist().now());
+			_highest_sent += _mss; // XX beware wrapping
+			_packets_sent += _mss;
+			p->sendOn();
+			if (_RFC2988_RTO_timeout == timeInf)
+			{ // RFC2988 5.1
+				_RFC2988_RTO_timeout = eventlist().now() + _rto;
+			}
+			continue;
 		}
-		else
-		{
-			p = TcpPacket::newpkt(_flow, *_route, _highest_sent + 1, data_seq, _mss);
-		}
-#else
+
 		TcpPacket *p = TcpPacket::newpkt(_flow, *_route, _highest_sent + 1, data_seq, _mss);
-#endif
 		p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
 		p->set_ts(eventlist().now());
 
@@ -675,25 +689,26 @@ void TcpSrc::retransmit_packet()
 	//  cout << "Retransmit packet on " << _flow.id << " " << _last_acked+1 << " " << data_seq << endl;
 #endif
 
-#ifdef PACKET_SCATTER
-	TcpPacket *p;
 	if (_paths)
 	{
-
-#ifdef RANDOM_PATH
-		_crt_path = random() % _paths->size();
-#endif
-
-		p = TcpPacket::newpkt(_flow, *(_paths->at(_crt_path)), _last_acked + 1, data_seq, _mss);
+		if (_scatter_random_paths)
+		{
+			_crt_path = random() % _paths->size();
+		}
+		TcpPacket *p = TcpPacket::newpkt(_flow, *(_paths->at(_crt_path)), _last_acked + 1, data_seq, _mss);
 		_crt_path = (_crt_path + 1) % _paths->size();
+		p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
+		p->set_ts(eventlist().now());
+		p->sendOn();
+		_packets_sent += _mss;
+
+		if (_RFC2988_RTO_timeout == timeInf)
+		{ // RFC2988 5.1
+			_RFC2988_RTO_timeout = eventlist().now() + _rto;
+		}
+		return;
 	}
-	else
-	{
-		p = TcpPacket::newpkt(_flow, *_route, _last_acked + 1, _mss);
-	}
-#else
 	TcpPacket *p = TcpPacket::newpkt(_flow, *_route, _last_acked + 1, data_seq, _mss);
-#endif
 	p->flow().logTraffic(*p, *this, TrafficLogger::PKT_CREATESEND);
 	p->set_ts(eventlist().now());
 	p->sendOn();
@@ -869,6 +884,7 @@ TcpSink::TcpSink()
 		: Logged("sink"), _cumulative_ack(0), _packets(0), _mSink(0), _crt_path(0)
 {
 	_nodename = "tcpsink";
+	_paths = NULL;
 }
 
 TcpSink::~TcpSink()
@@ -877,16 +893,7 @@ TcpSink::~TcpSink()
 	{
 		delete _route;
 	}
-#ifdef PACKET_SCATTER
-	if (_paths)
-	{
-		for (Route *r : _paths)
-		{
-			delete r;
-		}
-		delete _paths;
-	}
-#endif
+	clear_paths();
 }
 
 void TcpSink::connect(TcpSrc &src, const Route &route)
@@ -976,17 +983,15 @@ void TcpSink::send_ack(simtime_picosec ts, bool marked)
 
 	const Route *rt = _route;
 
-#ifdef PACKET_SCATTER
 	if (_paths)
 	{
-#ifdef RANDOM_PATH
-		_crt_path = random() % _paths->size();
-#endif
-
+		if (_scatter_random_paths)
+		{
+			_crt_path = random() % _paths->size();
+		}
 		rt = _paths->at(_crt_path);
 		_crt_path = (_crt_path + 1) % _paths->size();
 	}
-#endif
 
 	TcpAck *ack = TcpAck::newpkt(_src->_flow, *rt, 0, _cumulative_ack,
 															 _mSink != NULL ? _mSink->data_ack() : 0);
@@ -1002,10 +1007,31 @@ void TcpSink::send_ack(simtime_picosec ts, bool marked)
 	// ack->sendOn();
 }
 
-#ifdef PACKET_SCATTER
-void TcpSink::set_paths(vector<const Route *> *rt)
+void TcpSink::clear_paths()
 {
-	// this should only be used with route
+	if (_paths)
+	{
+		// Do not free the old Route objects here.
+		// Packets/ACKs can still be queued with pointers to the previous Route
+		// objects when we reconfigure without draining queue backlog.
+		// for (const Route *r : *_paths)
+		// {
+		// 	delete r;
+		// }
+		delete _paths;
+		_paths = NULL;
+	}
+	_scatter_random_paths = false;
+	_crt_path = 0;
+}
+
+void TcpSink::set_paths(vector<const Route *> *rt, bool randomize)
+{
+	clear_paths();
+	if (!rt || rt->empty())
+	{
+		return;
+	}
 	_paths = new vector<const Route *>();
 
 	for (unsigned int i = 0; i < rt->size(); i++)
@@ -1014,8 +1040,8 @@ void TcpSink::set_paths(vector<const Route *> *rt)
 		t->push_back(_src);
 		_paths->push_back(t);
 	}
+	_scatter_random_paths = randomize;
 }
-#endif
 
 ////////////////////////////////////////////////////////////////
 //  TCP RETRANSMISSION TIMER

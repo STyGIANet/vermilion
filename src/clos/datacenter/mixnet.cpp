@@ -253,12 +253,81 @@ vector<const Route *> *Mixnet::get_paths(int src_gpu_idx, int dest_gpu_idx) {
   }
 }
 
+vector<const Route *> *Mixnet::get_two_hop_paths(int src_gpu_idx, int dest_gpu_idx) {
+  int src = src_gpu_idx / NUM_GPU_PER_NODE;
+  int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
+  assert(src / region_size == dest / region_size);
+
+  vector<const Route *> *paths = new vector<const Route *>();
+  const int region_start = (src / region_size) * region_size;
+  const int region_end = region_start + region_size;
+
+  for (int mid = region_start; mid < region_end; ++mid)
+  {
+    if (mid == src || mid == dest)
+    {
+      continue;
+    }
+    if (conn[src][mid] <= 0 || conn[mid][dest] <= 0)
+    {
+      continue;
+    }
+
+    route_t *routeout = new Route();
+    routeout->push_back(queues[src][mid]);
+    routeout->push_back(pipes[src][mid]);
+    routeout->push_back(queues[mid][dest]);
+    routeout->push_back(pipes[mid][dest]);
+    if (qt == LOSSLESS_INPUT || qt == LOSSLESS_INPUT_ECN)
+      routeout->push_back(queues[mid][dest]->getRemoteEndpoint());
+
+    route_t *routeback = new Route();
+    routeback->push_back(queues[dest][mid]);
+    routeback->push_back(pipes[dest][mid]);
+    routeback->push_back(queues[mid][src]);
+    routeback->push_back(pipes[mid][src]);
+    if (qt == LOSSLESS_INPUT || qt == LOSSLESS_INPUT_ECN)
+      routeback->push_back(queues[mid][src]->getRemoteEndpoint());
+
+    routeout->set_reverse(routeback);
+    routeback->set_reverse(routeout);
+    check_non_null_ocs(routeout);
+    paths->push_back(routeout);
+  }
+
+  return paths;
+}
+
 vector<const Route*>* Mixnet::get_eps_paths(int src_gpu_idx, int dest_gpu_idx) {
   // all2all task and p2p task will call this function
   // convert the gpu id into node id
   int src = src_gpu_idx / NUM_GPU_PER_NODE;
   int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
   return elec_topology->get_paths(src, dest);
+}
+
+bool Mixnet::has_two_hop_path(int src_gpu_idx, int dest_gpu_idx) const {
+  const int src = src_gpu_idx / NUM_GPU_PER_NODE;
+  const int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
+  if (src / region_size != dest / region_size)
+  {
+    return false;
+  }
+
+  const int region_start = (src / region_size) * region_size;
+  const int region_end = region_start + region_size;
+  for (int mid = region_start; mid < region_end; ++mid)
+  {
+    if (mid == src || mid == dest)
+    {
+      continue;
+    }
+    if (conn[src][mid] > 0 && conn[mid][dest] > 0)
+    {
+      return true;
+    }
+  }
+  return false;
 }
 
 

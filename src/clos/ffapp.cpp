@@ -33,6 +33,49 @@ void dump_region_matrix(std::ostream& os,
         os << std::endl;
     }
 }
+
+std::vector<const Route*>* get_mixnet_two_hop_paths(
+    Mixnet* mixnet,
+    int src_gpu_idx,
+    int dest_gpu_idx) {
+    int src = src_gpu_idx / NUM_GPU_PER_NODE;
+    int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
+    assert(src / mixnet->region_size == dest / mixnet->region_size);
+
+    std::vector<const Route*>* paths = new std::vector<const Route*>();
+    const int region_start = (src / mixnet->region_size) * mixnet->region_size;
+    const int region_end = region_start + mixnet->region_size;
+
+    for (int mid = region_start; mid < region_end; ++mid) {
+        if (mid == src || mid == dest) {
+            continue;
+        }
+
+        Route* routeout = new Route();
+        routeout->push_back(mixnet->queues[src][mid]);
+        routeout->push_back(mixnet->pipes[src][mid]);
+        routeout->push_back(mixnet->queues[mid][dest]);
+        routeout->push_back(mixnet->pipes[mid][dest]);
+        if (mixnet->qt == LOSSLESS_INPUT || mixnet->qt == LOSSLESS_INPUT_ECN) {
+            routeout->push_back(mixnet->queues[mid][dest]->getRemoteEndpoint());
+        }
+
+        Route* routeback = new Route();
+        routeback->push_back(mixnet->queues[dest][mid]);
+        routeback->push_back(mixnet->pipes[dest][mid]);
+        routeback->push_back(mixnet->queues[mid][src]);
+        routeback->push_back(mixnet->pipes[mid][src]);
+        if (mixnet->qt == LOSSLESS_INPUT || mixnet->qt == LOSSLESS_INPUT_ECN) {
+            routeback->push_back(mixnet->queues[mid][src]->getRemoteEndpoint());
+        }
+
+        routeout->set_reverse(routeback);
+        routeback->set_reverse(routeout);
+        paths->push_back(routeout);
+    }
+
+    return paths;
+}
 }
 
 int FFApplication::total_apps = 0;
@@ -1096,6 +1139,7 @@ void FFTask::cleanup() {
             task->state = FFTask::TASK_READY;
             if(task->type == FFTask::TASK_ALLTOALL && task->info.find("GROUP_BY forward") != std::string::npos && ffapp->is_mixnet && ffapp->topomanager){
                 FFAlltoAll* all2all_task = dynamic_cast<FFAlltoAll*>(task);
+                all2all_task->flag = 0;
                 all2all_task->updatetrafficmatrix();
                 // Trigger reconfiguration
                 int region_id = (all2all_task->from_node_ids[0] / 8) / ffapp->topomanager->region_size;
@@ -1132,6 +1176,7 @@ void FFTask::cleanup() {
                 // GROUP_BY-forward. We "poke" the regional topo manager to continue the existing
                 // cycle, but we do NOT append a second traffic matrix.
                 FFAlltoAll* all2all_task = dynamic_cast<FFAlltoAll*>(task);
+                all2all_task->flag = 1;
                 all2all_task->updatetrafficmatrix();
 
                 int region_id = (all2all_task->from_node_ids[0] / 8) / ffapp->topomanager->region_size;
@@ -1147,6 +1192,7 @@ void FFTask::cleanup() {
                     ffapp->topomanager->regional_topo_managers[region_id]->reverse=1;
                     ffapp->topomanager->regional_topo_managers[region_id]->activeAlltoAll=1;
                      ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_ready=0; //Can change this to conditional if the matrix change
+                     ffapp->topomanager->demandrecorder->append_traffic_matrix(layer_id, region_id, all2all_task->all2all_traffic_matrix);
                 assert(ffapp->topomanager->demandrecorder->check_traffic_matrix(layer_id, region_id));
                 eventlist().sourceIsPending(*(ffapp->topomanager->regional_topo_managers[region_id]), eventlist().now());
                     }
@@ -2200,6 +2246,17 @@ FFAlltoAll::FFAlltoAll(FFApplication * ffapp, uint64_t taskid, int counter, std:
 
 void FFAlltoAll::updatetrafficmatrix() {
     if (flag ==1){
+        for (size_t i = 0; i < from_node_ids.size()/ffapp->tp_degree; i++) {
+            for (size_t j = 0; j < to_node_ids.size()/ffapp->tp_degree; j++) {
+                for(int tp_idx=0;tp_idx<ffapp->tp_degree;tp_idx++) {
+                    int flow_size = operator_sizes[std::make_pair(from_node_ids[i*ffapp->tp_degree+tp_idx], to_node_ids[j*ffapp->tp_degree+tp_idx])];
+                    int src_node = from_node_ids[i*ffapp->tp_degree+tp_idx] / 8;
+                    int dst_node = to_node_ids[j*ffapp->tp_degree+tp_idx] / 8;
+                    int region_size = ffapp->topomanager->region_size;
+                    all2all_traffic_matrix.add_elem_by(dst_node%region_size, src_node%region_size, flow_size);
+                }
+            }
+        }
         return;
     }
     for (size_t i = 0; i < from_node_ids.size()/ffapp->tp_degree; i++) {
@@ -2213,7 +2270,7 @@ void FFAlltoAll::updatetrafficmatrix() {
             }
         }
     }
-    flag=0;
+    // flag=0;
 }
 
 void FFAlltoAll::doNextEvent() {
@@ -2336,6 +2393,7 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
         }
         else {
             //Add tje flow to ocs but pause the flow immediately, we will resume the flow after reconfig
+            // set the iselec and isall2all
             flowSrc->is_elec = false; //Deeksha: All electric works well getting back to ocs for debugging
             // Update OCS volume statistics (sent)
             node_ocs_volume[src_node] += flow_size;
@@ -2383,14 +2441,39 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
     int choice = 0;
     vector<const Route*>* srcpaths;
     vector<const Route*>* dstpaths;
+    bool use_rotor_two_hop = false;
+    bool rotor_paths_available = false;
     if(flowSrc->is_elec) {
         assert(ffapp->is_mixnet);
         srcpaths = ffapp->topology->get_eps_paths(src_gpu, dst_gpu);
         dstpaths = ffapp->topology->get_eps_paths(dst_gpu, src_gpu);
     }
     else {
-        srcpaths = ffapp->topology->get_paths(src_gpu, dst_gpu);
-        dstpaths = ffapp->topology->get_paths(dst_gpu, src_gpu);
+        if (ffapp->is_mixnet && ffapp->topomanager) {
+            int region_id = (src_gpu / NUM_GPU_PER_NODE) / ffapp->topomanager->region_size;
+            assert(region_id == (dst_gpu / NUM_GPU_PER_NODE) / ffapp->topomanager->region_size);
+            use_rotor_two_hop =
+                ffapp->topomanager->regional_topo_managers[region_id]->conn_cycle_algorithm ==
+                CONN_CYCLE_ROTOR;
+        }
+
+        if (use_rotor_two_hop) {
+            Mixnet* mixnet_topology = static_cast<Mixnet*>(ffapp->topology);
+            srcpaths = get_mixnet_two_hop_paths(mixnet_topology, src_gpu, dst_gpu);
+            dstpaths = get_mixnet_two_hop_paths(mixnet_topology, dst_gpu, src_gpu);
+            rotor_paths_available = !srcpaths->empty() && !dstpaths->empty();
+            if (!rotor_paths_available) {
+                delete srcpaths;
+                delete dstpaths;
+                srcpaths = ffapp->topology->get_paths(src_gpu, dst_gpu);
+                dstpaths = ffapp->topology->get_paths(dst_gpu, src_gpu);
+                // flowSrc->pause_flow_in_region();
+            }
+        }
+        else {
+            srcpaths = ffapp->topology->get_paths(src_gpu, dst_gpu);
+            dstpaths = ffapp->topology->get_paths(dst_gpu, src_gpu);
+        }
     }
 
     // set routeout
@@ -2429,6 +2512,11 @@ void FFAlltoAll::start_flow(int src_gpu, int dst_gpu) {
     }
     else {
         flowSrc->connect(*routeout, *routein, *flowSnk, curr_round > 0 ? eventlist().now() : start_time);
+    }
+
+    if (use_rotor_two_hop && rotor_paths_available) {
+        flowSrc->set_paths(srcpaths, true);
+        flowSnk->set_paths(dstpaths, true);
     }
 
     delete srcpaths;

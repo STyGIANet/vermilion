@@ -525,12 +525,10 @@ class TcpSrc : public PacketSink, public EventSource {
     uint32_t _maxcwnd;
     uint64_t _last_acked;
     uint32_t _ssthresh;
-    uint16_t _dupacks;
+    uint32_t _dupacks;
     bool _finished;
-#ifdef PACKET_SCATTER
-    uint16_t DUPACK_TH;
+    uint32_t DUPACK_TH;
     uint16_t _crt_path;
-#endif
     ofstream * fstream_out;
 
     int32_t _app_limited;
@@ -567,11 +565,11 @@ class TcpSrc : public PacketSink, public EventSource {
 
     const Route* _route;
     simtime_picosec _last_ping;
-#ifdef PACKET_SCATTER
     vector<const Route*>* _paths;
+    bool _scatter_random_paths = false;
 
-    void set_paths(vector<const Route*>* rt);
-#endif
+    void set_paths(vector<const Route*>* rt, bool randomize = false);
+    void clear_paths();
     void send_packets();
 
 	
@@ -635,11 +633,11 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
     list<TcpAck::seq_t> _received; /* list of packets above a hole, that 
 				      we've received */
 
-#ifdef PACKET_SCATTER
     vector<const Route*>* _paths;
+    bool _scatter_random_paths = false;
 
-    void set_paths(vector<const Route*>* rt);
-#endif
+    void set_paths(vector<const Route*>* rt, bool randomize = false);
+    void clear_paths();
 
     TcpSrc* _src;
  private:

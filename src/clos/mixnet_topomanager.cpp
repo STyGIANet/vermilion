@@ -6,6 +6,7 @@
 #include <fstream>
 #include <strstream>
 #include <iostream>
+#include <cmath>
 // #include "taskgraph.pb.h"
 
 // #include "main.h"
@@ -20,9 +21,9 @@
 // #include "taskgraph_generated.h"
 // #include <queue>
 // #include <utility>
-static std::random_device rd;
-static std::mt19937 gen = std::mt19937(rd());
-static std::uniform_real_distribution<double> unif(0, 1);
+// static std::random_device rd;
+// static std::mt19937 gen = std::mt19937(rd());
+// static std::uniform_real_distribution<double> unif(0, 1);
 // FIXME: make sure all the src and dst are gpu idx, we need to do the conversion inside the node
 #define EDGE(a, b, n) ((a) > (b) ? ((a) * (n) + (b)) : ((b) * (n) + (a)))
 #define deg 16
@@ -30,6 +31,640 @@ static std::uniform_real_distribution<double> unif(0, 1);
 extern uint32_t RTT;
 extern uint32_t SPEED;
 extern ofstream fct_util_out;
+
+namespace {
+
+const char *conn_cycle_algorithm_name(MixnetConnCycleAlgorithm algorithm) {
+  switch (algorithm) {
+  case CONN_CYCLE_VERMILION:
+    return "vermilion";
+  case CONN_CYCLE_BIRKHOFF:
+    return "birkhoff";
+  case CONN_CYCLE_ROTOR:
+    return "rotor";
+  default:
+    return "unknown";
+  }
+}
+
+std::vector<const Route *> *get_mixnet_two_hop_paths(
+    Mixnet *mixnet,
+    int src_gpu_idx,
+    int dest_gpu_idx) {
+  int src = src_gpu_idx / NUM_GPU_PER_NODE;
+  int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
+  assert(src / mixnet->region_size == dest / mixnet->region_size);
+
+  std::vector<const Route *> *paths = new std::vector<const Route *>();
+  const int region_start = (src / mixnet->region_size) * mixnet->region_size;
+  const int region_end = region_start + mixnet->region_size;
+
+  for (int mid = region_start; mid < region_end; ++mid)
+  {
+    if (mid == src || mid == dest)
+    {
+      continue;
+    }
+
+    Route *routeout = new Route();
+    routeout->push_back(mixnet->queues[src][mid]);
+    routeout->push_back(mixnet->pipes[src][mid]);
+    routeout->push_back(mixnet->queues[mid][dest]);
+    routeout->push_back(mixnet->pipes[mid][dest]);
+    if (mixnet->qt == LOSSLESS_INPUT || mixnet->qt == LOSSLESS_INPUT_ECN)
+      routeout->push_back(mixnet->queues[mid][dest]->getRemoteEndpoint());
+
+    Route *routeback = new Route();
+    routeback->push_back(mixnet->queues[dest][mid]);
+    routeback->push_back(mixnet->pipes[dest][mid]);
+    routeback->push_back(mixnet->queues[mid][src]);
+    routeback->push_back(mixnet->pipes[mid][src]);
+    if (mixnet->qt == LOSSLESS_INPUT || mixnet->qt == LOSSLESS_INPUT_ECN)
+      routeback->push_back(mixnet->queues[mid][src]->getRemoteEndpoint());
+
+    routeout->set_reverse(routeback);
+    routeback->set_reverse(routeout);
+    paths->push_back(routeout);
+  }
+
+  return paths;
+}
+
+bool has_mixnet_two_hop_path(
+    const Mixnet *mixnet,
+    int src_gpu_idx,
+    int dest_gpu_idx) {
+  const int src = src_gpu_idx / NUM_GPU_PER_NODE;
+  const int dest = dest_gpu_idx / NUM_GPU_PER_NODE;
+  if (src / mixnet->region_size != dest / mixnet->region_size)
+  {
+    return false;
+  }
+  return mixnet->region_size > 2;
+}
+
+std::vector<std::vector<double>> load_demand_matrix_for_conn_cycle(
+    const Matrix2D<double> &traffic_matrix,
+    int n,
+    bool reverse) {
+  const double eps = 1e-5;
+  std::vector<std::vector<double>> demand(n, std::vector<double>(n, 0.0));
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < n; ++col) {
+      double value = reverse ? traffic_matrix.get_elem(col, row)
+                             : traffic_matrix.get_elem(row, col);
+      if (row == col || std::fabs(value) < eps) {
+        value = 0.0;
+      }
+      demand[row][col] = value;
+    }
+  }
+  return demand;
+}
+
+std::vector<std::vector<double>> normalize_demand_matrix(
+    const std::vector<std::vector<double>> &demand) {
+  const int n = static_cast<int>(demand.size());
+  double max_row_sum = 0.0;
+  double max_col_sum = 0.0;
+
+  for (int row = 0; row < n; ++row) {
+    double row_sum = 0.0;
+    for (int col = 0; col < n; ++col) {
+      row_sum += demand[row][col];
+    }
+    max_row_sum = std::max(max_row_sum, row_sum);
+  }
+
+  for (int col = 0; col < n; ++col) {
+    double col_sum = 0.0;
+    for (int row = 0; row < n; ++row) {
+      col_sum += demand[row][col];
+    }
+    max_col_sum = std::max(max_col_sum, col_sum);
+  }
+
+  const double max_sum = std::max(max_row_sum, max_col_sum);
+  std::vector<std::vector<double>> normalized = demand;
+  if (max_sum == 0.0) {
+    return normalized;
+  }
+
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < n; ++col) {
+      normalized[row][col] /= max_sum;
+    }
+  }
+  return normalized;
+}
+
+std::vector<std::vector<int>> floor_scaled_demand_matrix(
+    const std::vector<std::vector<double>> &normalized_demand,
+    int scaled_degree) {
+  const int n = static_cast<int>(normalized_demand.size());
+  std::vector<std::vector<int>> rounded(n, std::vector<int>(n, 0));
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < n; ++col) {
+      if (row == col) {
+        continue;
+      }
+      rounded[row][col] =
+          static_cast<int>(std::floor(normalized_demand[row][col] * scaled_degree));
+    }
+  }
+  return rounded;
+}
+
+std::vector<std::vector<int>> directed_configuration_model_counts(
+    const std::vector<int> &in_left,
+    const std::vector<int> &out_left,
+    const std::vector<std::vector<int>> &rounded_matrix) {
+  const int n = static_cast<int>(in_left.size());
+  std::vector<int> out_stubs;
+  std::vector<int> in_remaining = in_left;
+  int total_in = 0;
+  int total_out = 0;
+
+  for (int node = 0; node < n; ++node) {
+    assert(in_left[node] >= 0);
+    assert(out_left[node] >= 0);
+    total_in += in_left[node];
+    total_out += out_left[node];
+    for (int cnt = 0; cnt < out_left[node]; ++cnt) {
+      out_stubs.push_back(node);
+    }
+  }
+
+  assert(total_in == total_out);
+  // Old randomized version:
+  // std::shuffle(out_stubs.begin(), out_stubs.end(), gen);
+  // Deterministic version: handle higher-residual sources first, then by node id.
+  std::stable_sort(out_stubs.begin(), out_stubs.end(),
+                   [&out_left](int lhs, int rhs) {
+                     if (out_left[lhs] != out_left[rhs]) {
+                       return out_left[lhs] > out_left[rhs];
+                     }
+                     return lhs < rhs;
+                   });
+
+  std::vector<std::vector<int>> counts(n, std::vector<int>(n, 0));
+  std::vector<int> assigned_in(out_stubs.size(), -1);
+  for (size_t idx = 0; idx < out_stubs.size(); ++idx) {
+    const int src = out_stubs[idx];
+    int best_remaining = -1;
+    int chosen_dst = -1;
+    int chosen_demand = std::numeric_limits<int>::max();
+    for (int dst = 0; dst < n; ++dst) {
+      if (dst == src || in_remaining[dst] <= 0) {
+        continue;
+      }
+      const int candidate_demand = rounded_matrix[src][dst];
+      if (in_remaining[dst] > best_remaining ||
+          (in_remaining[dst] == best_remaining &&
+           (candidate_demand < chosen_demand ||
+            (candidate_demand == chosen_demand &&
+             (chosen_dst == -1 || dst < chosen_dst))))) {
+        best_remaining = in_remaining[dst];
+        chosen_demand = candidate_demand;
+        chosen_dst = dst;
+      }
+    }
+
+    if (chosen_dst != -1) {
+      // Old randomized tie-break:
+      // std::uniform_int_distribution<int> pick_candidate(
+      //     0, static_cast<int>(candidates.size()) - 1);
+      // const int dst = candidates[pick_candidate(gen)];
+      assigned_in[idx] = chosen_dst;
+      in_remaining[chosen_dst]--;
+      counts[src][chosen_dst]++;
+      continue;
+    }
+
+    // If only self-capacity remains, repair by swapping one earlier off-diagonal
+    // assignment. Prefer disturbing the least-demand edge in the rounded demand
+    // matrix; if several candidates tie, use the farthest earlier one.
+    int swap_idx = -1;
+    int best_swap_demand = std::numeric_limits<int>::max();
+    for (int prev = static_cast<int>(idx) - 1; prev >= 0; --prev) {
+      const int prev_src = out_stubs[prev];
+      const int prev_dst = assigned_in[prev];
+      if (prev_src != src && prev_dst != src) {
+        const int candidate_demand = rounded_matrix[prev_src][prev_dst];
+        if (candidate_demand < best_swap_demand ||
+            (candidate_demand == best_swap_demand &&
+             (swap_idx == -1 || prev < swap_idx))) {
+          best_swap_demand = candidate_demand;
+          swap_idx = prev;
+        }
+      }
+    }
+
+    assert(swap_idx != -1);
+    assert(in_remaining[src] > 0);
+
+    const int moved_dst = assigned_in[swap_idx];
+    assigned_in[swap_idx] = src;
+    counts[out_stubs[swap_idx]][moved_dst]--;
+    counts[out_stubs[swap_idx]][src]++;
+
+    assigned_in[idx] = moved_dst;
+    in_remaining[src]--;
+    counts[src][moved_dst]++;
+  }
+
+  for (int node = 0; node < n; ++node) {
+    assert(in_remaining[node] == 0);
+    assert(counts[node][node] == 0);
+  }
+  return counts;
+}
+
+bool find_augmenting_path(
+    int u,
+    const std::vector<std::vector<int>> &edge_counts,
+    std::vector<int> &match_right,
+    std::vector<char> &seen) {
+  const int n = static_cast<int>(edge_counts.size());
+  for (int v = 0; v < n; ++v) {
+    if (u == v || edge_counts[u][v] <= 0 || seen[v]) {
+      continue;
+    }
+    seen[v] = 1;
+    if (match_right[v] == -1 ||
+        find_augmenting_path(match_right[v], edge_counts, match_right, seen)) {
+      match_right[v] = u;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool try_maximum_bipartite_matching(
+    const std::vector<std::vector<int>> &edge_counts,
+    std::vector<std::pair<int, int>> &matching) {
+  const int n = static_cast<int>(edge_counts.size());
+  std::vector<int> match_right(n, -1);
+
+  for (int u = 0; u < n; ++u) {
+    std::vector<char> seen(n, 0);
+    const bool matched = find_augmenting_path(u, edge_counts, match_right, seen);
+    if (!matched) {
+      matching.clear();
+      return false;
+    }
+  }
+
+  matching.clear();
+  matching.reserve(n);
+  for (int v = 0; v < n; ++v) {
+    if (match_right[v] == -1) {
+      matching.clear();
+      return false;
+    }
+    matching.push_back({match_right[v], v});
+  }
+  return true;
+}
+
+std::vector<std::pair<int, int>> maximum_bipartite_matching(
+    const std::vector<std::vector<int>> &edge_counts) {
+  std::vector<std::pair<int, int>> matching;
+  const bool matched = try_maximum_bipartite_matching(edge_counts, matching);
+  assert(matched && "Expected a perfect matching in conn cycle decomposition");
+  return matching;
+}
+
+int directed_degree(const std::vector<std::vector<int>> &edge_counts, int node) {
+  const int n = static_cast<int>(edge_counts.size());
+  int degree = 0;
+  for (int other = 0; other < n; ++other) {
+    degree += edge_counts[node][other];
+    degree += edge_counts[other][node];
+  }
+  return degree;
+}
+
+std::vector<std::vector<std::pair<int, int>>> decompose_into_perfect_matchings(
+    const std::vector<std::vector<int>> &total_edge_cap,
+    int expected_matchings) {
+  std::vector<std::vector<int>> remaining = total_edge_cap;
+  std::vector<std::vector<std::pair<int, int>>> matchings(expected_matchings);
+  int num_matched = 0;
+
+  while (directed_degree(remaining, 0) >= 1) {
+    assert(num_matched < expected_matchings);
+    const auto matching = maximum_bipartite_matching(remaining);
+    for (const auto &edge : matching) {
+      remaining[edge.first][edge.second]--;
+    }
+    matchings[num_matched] = matching;
+    num_matched++;
+  }
+
+  assert(num_matched == expected_matchings);
+  return matchings;
+}
+
+std::vector<std::vector<double>> sinkhorn_balance_demand_matrix(
+    const std::vector<std::vector<double>> &demand) {
+  const int n = static_cast<int>(demand.size());
+  const double support_epsilon = 1e-9;
+  const double tolerance = 1e-12;
+  const int max_iterations = 10000;
+
+  std::vector<std::vector<double>> matrix(n, std::vector<double>(n, 0.0));
+  double total_demand = 0.0;
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < n; ++col) {
+      if (row == col) {
+        continue;
+      }
+      total_demand += demand[row][col];
+    }
+  }
+
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < n; ++col) {
+      if (row == col) {
+        matrix[row][col] = 0.0;
+        continue;
+      }
+      if (total_demand == 0.0) {
+        matrix[row][col] = 1.0;
+      } else {
+        matrix[row][col] = std::max(demand[row][col], 0.0) + support_epsilon;
+      }
+    }
+  }
+
+  if (n <= 1) {
+    return matrix;
+  }
+
+  for (int iter = 0; iter < max_iterations; ++iter) {
+    for (int row = 0; row < n; ++row) {
+      double row_sum = 0.0;
+      for (int col = 0; col < n; ++col) {
+        row_sum += matrix[row][col];
+      }
+      if (row_sum > 0.0) {
+        for (int col = 0; col < n; ++col) {
+          matrix[row][col] /= row_sum;
+        }
+      }
+    }
+
+    for (int col = 0; col < n; ++col) {
+      double col_sum = 0.0;
+      for (int row = 0; row < n; ++row) {
+        col_sum += matrix[row][col];
+      }
+      if (col_sum > 0.0) {
+        for (int row = 0; row < n; ++row) {
+          matrix[row][col] /= col_sum;
+        }
+      }
+    }
+
+    double max_error = 0.0;
+    for (int row = 0; row < n; ++row) {
+      double row_sum = 0.0;
+      for (int col = 0; col < n; ++col) {
+        row_sum += matrix[row][col];
+      }
+      max_error = std::max(max_error, std::fabs(row_sum - 1.0));
+    }
+    for (int col = 0; col < n; ++col) {
+      double col_sum = 0.0;
+      for (int row = 0; row < n; ++row) {
+        col_sum += matrix[row][col];
+      }
+      max_error = std::max(max_error, std::fabs(col_sum - 1.0));
+    }
+
+    if (max_error <= tolerance) {
+      break;
+    }
+  }
+
+  return matrix;
+}
+
+struct WeightedPermutation {
+  double lambda = 0.0;
+  std::vector<std::pair<int, int>> matching;
+};
+
+std::vector<WeightedPermutation> birkhoff_decompose_matrix(
+    const std::vector<std::vector<double>> &doubly_stochastic_matrix) {
+  const int n = static_cast<int>(doubly_stochastic_matrix.size());
+  const double residual_tolerance = 1e-10;
+  const int max_terms = std::max(1, n * n * 4);
+
+  std::vector<std::vector<double>> remaining = doubly_stochastic_matrix;
+  std::vector<WeightedPermutation> decomposition;
+
+  for (int term_idx = 0; term_idx < max_terms; ++term_idx) {
+    double max_residual = 0.0;
+    for (int row = 0; row < n; ++row) {
+      for (int col = 0; col < n; ++col) {
+        if (remaining[row][col] >= 0.0 && remaining[row][col] < residual_tolerance) {
+          remaining[row][col] = 0.0;
+        }
+        if (remaining[row][col] < 0.0 && std::fabs(remaining[row][col]) < residual_tolerance) {
+          remaining[row][col] = 0.0;
+        }
+        assert(remaining[row][col] >= 0.0);
+        max_residual = std::max(max_residual, remaining[row][col]);
+      }
+    }
+    if (max_residual <= residual_tolerance) {
+      break;
+    }
+
+    std::vector<std::vector<int>> support_graph(n, std::vector<int>(n, 0));
+    for (int row = 0; row < n; ++row) {
+      for (int col = 0; col < n; ++col) {
+        if (row == col) {
+          continue;
+        }
+        // Keep every positive residual edge in the support graph. Tiny edges are
+        // still part of the valid Birkhoff support and can be necessary for the
+        // next perfect matching after repeated subtraction.
+        if (remaining[row][col] > 0.0) {
+          support_graph[row][col] = 1;
+        }
+      }
+    }
+
+    std::vector<std::pair<int, int>> matching;
+    const bool matched = try_maximum_bipartite_matching(support_graph, matching);
+    assert(matched && "Expected a perfect matching in Birkhoff decomposition support graph");
+    double lambda = std::numeric_limits<double>::max();
+    for (const auto &edge : matching) {
+      lambda = std::min(lambda, remaining[edge.first][edge.second]);
+    }
+    assert(lambda > 0.0);
+
+    for (const auto &edge : matching) {
+      remaining[edge.first][edge.second] -= lambda;
+      if (remaining[edge.first][edge.second] < 0.0 &&
+          std::fabs(remaining[edge.first][edge.second]) < residual_tolerance) {
+        remaining[edge.first][edge.second] = 0.0;
+      }
+      if (remaining[edge.first][edge.second] < residual_tolerance) {
+        remaining[edge.first][edge.second] = 0.0;
+      }
+    }
+
+    WeightedPermutation term;
+    term.lambda = lambda;
+    term.matching = matching;
+    decomposition.push_back(term);
+  }
+
+  double max_residual = 0.0;
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col < n; ++col) {
+      max_residual = std::max(max_residual, remaining[row][col]);
+    }
+  }
+  assert(max_residual <= 1e-6);
+  return decomposition;
+}
+
+simtime_picosec birkhoff_cycle_interval_from_demand(
+    const std::vector<std::vector<double>> &demand,
+    int alpha) {
+  if (alpha <= 0) {
+    return 0;
+  }
+
+  double max_row_sum_bytes = 0.0;
+  double max_col_sum_bytes = 0.0;
+  const int n = static_cast<int>(demand.size());
+  for (int row = 0; row < n; ++row) {
+    double row_sum_bytes = 0.0;
+    double col_sum_bytes = 0.0;
+    for (int col = 0; col < n; ++col) {
+      row_sum_bytes += std::max(demand[row][col], 0.0);
+      col_sum_bytes += std::max(demand[col][row], 0.0);
+    }
+    max_row_sum_bytes = std::max(max_row_sum_bytes, row_sum_bytes);
+    max_col_sum_bytes = std::max(max_col_sum_bytes, col_sum_bytes);
+  }
+
+  const double bottleneck_bytes = std::max(max_row_sum_bytes, max_col_sum_bytes);
+  if (bottleneck_bytes <= 0.0) {
+    return 0;
+  }
+
+  const double aggregate_bps =
+      static_cast<double>(alpha) * static_cast<double>(speedFromMbps((uint64_t)SPEED));
+  if (aggregate_bps <= 0.0) {
+    return 0;
+  }
+
+  const double cycle_interval_ps =
+      bottleneck_bytes * 8.0 * 1.0e12 / aggregate_bps;
+  simtime_picosec interval =
+      static_cast<simtime_picosec>(std::llround(cycle_interval_ps));
+  if (interval <= 0) {
+    interval = 1;
+  }
+  return interval;
+}
+
+simtime_picosec vermilion_cycle_interval_from_demand(
+    const std::vector<std::vector<double>> &demand,
+    int alpha,
+    int k) {
+  if (alpha <= 0 || k <= 0) {
+    return 0;
+  }
+
+  double max_row_sum_bytes = 0.0;
+  double max_col_sum_bytes = 0.0;
+  const int n = static_cast<int>(demand.size());
+  for (int row = 0; row < n; ++row) {
+    double row_sum_bytes = 0.0;
+    double col_sum_bytes = 0.0;
+    for (int col = 0; col < n; ++col) {
+      row_sum_bytes += std::max(demand[row][col], 0.0);
+      col_sum_bytes += std::max(demand[col][row], 0.0);
+    }
+    max_row_sum_bytes = std::max(max_row_sum_bytes, row_sum_bytes);
+    max_col_sum_bytes = std::max(max_col_sum_bytes, col_sum_bytes);
+  }
+
+  const double bottleneck_bytes = std::max(max_row_sum_bytes, max_col_sum_bytes);
+  if (bottleneck_bytes <= 0.0) {
+    return 0;
+  }
+
+  const double aggregate_bps =
+      static_cast<double>(alpha) * static_cast<double>(speedFromMbps((uint64_t)SPEED));
+  if (aggregate_bps <= 0.0) {
+    return 0;
+  }
+
+  const double scaled_bytes =
+      bottleneck_bytes * (static_cast<double>(k + 1) / static_cast<double>(k));
+  const double cycle_interval_ps =
+      scaled_bytes * 8.0 * 1.0e12 / aggregate_bps;
+  simtime_picosec interval =
+      static_cast<simtime_picosec>(std::llround(cycle_interval_ps));
+  if (interval <= 0) {
+    interval = 1;
+  }
+  return interval;
+}
+
+std::vector<simtime_picosec> split_interval_evenly(
+    simtime_picosec total_interval,
+    size_t num_slots) {
+  std::vector<simtime_picosec> intervals;
+  if (total_interval <= 0 || num_slots == 0) {
+    return intervals;
+  }
+
+  intervals.assign(num_slots, total_interval / static_cast<simtime_picosec>(num_slots));
+  simtime_picosec remainder =
+      total_interval % static_cast<simtime_picosec>(num_slots);
+  for (size_t idx = 0; idx < num_slots; ++idx) {
+    if (remainder <= 0) {
+      break;
+    }
+    intervals[idx] += 1;
+    remainder--;
+  }
+  for (size_t idx = 0; idx < num_slots; ++idx) {
+    if (intervals[idx] <= 0) {
+      intervals[idx] = 1;
+    }
+  }
+  return intervals;
+}
+
+simtime_picosec interval_from_birkhoff_lambda(
+    double lambda,
+    simtime_picosec cycle_interval) {
+  if (cycle_interval <= 0 || lambda <= 0.0) {
+    return 0;
+  }
+
+  const double scaled_interval =
+      lambda * static_cast<double>(cycle_interval);
+  simtime_picosec interval =
+      static_cast<simtime_picosec>(std::llround(scaled_interval));
+  if (interval <= 0) {
+    interval = 1;
+  }
+  return interval;
+}
+
+}  // namespace
 
 // static bool has_active_alltoall_in_region(RegionalTopoManager* region_manager, int region_id);
 
@@ -69,7 +704,7 @@ void All2AllTrafficRecorder::append_traffic_matrix(int layer_id, int region_id, 
   assert(region_id < region_num);
   if (!tm.is_symmetric())
   {
-    tm.transform2symmetric(); // Deeksha: Normalise the traffic matrix instead of symmettic
+    // tm.transform2symmetric(); // Keep the directional all-to-all matrix for Vermilion schedule generation.
   }
   if (traffic_matrix[layer_id][region_id]->get_base() == 0)
   { // Deeksha: base is just to check if the matrix is initialized 0 means not initialized
@@ -188,8 +823,8 @@ void All2AllTrafficRecorder::dump_all_traffic_matrices(int layer_id, int region_
   }
 }
 
-RegionalTopoManager::RegionalTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, int region_id, bool periodic_reconf, simtime_picosec periodic_interval)
-  : EventSource(eventlist, "MixnetRegionalTopoManager"), topo(topo), demandrecorder(demandrecorder), reconf_delay(refonc_delay), eventlist(eventlist), region_id(region_id), periodic_reconf(periodic_reconf), periodic_interval(periodic_interval), paused_flow_count(0), first_reconf_done(false)
+RegionalTopoManager::RegionalTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, int region_id, bool periodic_reconf, simtime_picosec periodic_interval, MixnetConnCycleAlgorithm conn_cycle_algorithm)
+  : EventSource(eventlist, "MixnetRegionalTopoManager"), topo(topo), demandrecorder(demandrecorder), reconf_delay(refonc_delay), eventlist(eventlist), region_id(region_id), periodic_reconf(periodic_reconf), periodic_interval(periodic_interval), conn_cycle_algorithm(conn_cycle_algorithm), paused_flow_count(0), first_reconf_done(false)
 {
 
   nnodes = topo->no_of_nodes();
@@ -272,7 +907,7 @@ void RegionalTopoManager::start_reconf()
   }
    
   else{
-    eventlist.sourceIsPendingRel(*this, timeFromNs(100)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
+    eventlist.sourceIsPendingRel(*this, timeFromNs(1)); // Deeksha: Check every 1 us if the queues are drained, to trigger the reconfiguration as soon as possible
     //std::cout<<"Stuck here for region "<< region_id << " non_empty_queues: " << non_empty_queues << std::endl;
     status = TopoStatus::TOPO_WAIT_DRAIN;
   }
@@ -347,6 +982,9 @@ void RegionalTopoManager::finish_reconf()
         continue;
       Queue *q = topo->queues[i][j];
       ECNQueue *eq = dynamic_cast<ECNQueue *>(q);
+      // If a queue had a stale completion event from before the pause, drop it
+      // before conditionally restarting service under the new topology.
+      eventlist.cancelPendingSource(*eq);
       // std::cerr << "queue " << i << ", " << j << " br " << eq->_bitrate << " ps per byte " << eq->_ps_per_byte << " size " << eq->_enqueued.size() << std::endl;
       // vamsi: we can leave the queues non-empty, they just need to be paused, and resume when they have a connection
       // assert(eq->_enqueued.empty());      //Deeksha: Commented for testing 
@@ -381,11 +1019,16 @@ void RegionalTopoManager::finish_reconf()
   // Only skip scheduling when there are no paused flows after the first reconfiguration.
   // For the very first reconfiguration we still want to schedule the periodic reconf regardless
   // of paused_flow_count so that the periodic policy takes effect.
-  if (periodic_reconf && periodic_interval > 0 &&
+  simtime_picosec next_periodic_interval = active_conn_cycle_interval;
+  if (next_periodic_interval <= 0)
+  {
+    next_periodic_interval = periodic_interval;
+  }
+  if (periodic_reconf && next_periodic_interval > 0 &&
       (paused_flow_count > 0 || has_active_alltoall_in_region(this, region_id) || !first_reconf_done))
   {
-    eventlist.sourceIsPending(*this, eventlist.now() + periodic_interval);
-    //std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + periodic_interval << std::endl;
+    eventlist.sourceIsPending(*this, eventlist.now() + next_periodic_interval);
+    //std::cout<< "periodic reconf scheduled at "<< region_id << current_layer_id << " at time " << eventlist.now() + next_periodic_interval << std::endl;
   }
   else
   {
@@ -410,6 +1053,9 @@ void RegionalTopoManager::set_regional_queues_pause_recved()
       // vamsi: We just need to pause the queue and allow pipes to drain (inflight bytes on the wire)
 
       eq->_state_send = LosslessQueue::PAUSED;
+      // Queue backlog should stay queued across reconfiguration. Cancel any
+      // already-scheduled dequeue so only packets already inside the pipe drain.
+      eventlist.cancelPendingSource(*eq);
 
       // if(eq->queuesize() > 0)
       // {
@@ -502,6 +1148,11 @@ void RegionalTopoManager::set_regional_tcp_pause()
 }
 
 
+bool RegionalTopoManager::use_rotor_paths() const
+{
+  return conn_cycle_algorithm == CONN_CYCLE_ROTOR;
+}
+
 void RegionalTopoManager::update_regional_route()
 {
   /*
@@ -518,6 +1169,16 @@ void RegionalTopoManager::update_regional_route()
     TcpSrc *tcpsrc = *i;
     if (is_in_region(tcpsrc))
     {
+      assert(tcpsrc->is_all2all);
+
+      if (use_rotor_paths())
+      {
+        // Rotor two-hop uses the complete-graph two-hop route set carried by
+        // packets. It does not need per-slot route rewrites here.
+        i++;
+        continue;
+      }
+
       // update path of running flow
       int src = tcpsrc->_flow_src / 8;
       int dst = tcpsrc->_flow_dst / 8;
@@ -531,7 +1192,6 @@ void RegionalTopoManager::update_regional_route()
         // this flow is re-assigned to elec fabric
         tcpsrc->is_elec = false; // Deeksha: Trying to pause all flows which do not have direct connect for now, to avoid the complexity of route update for elec flows, to do: update route for elec flows as well
       }
-      assert(tcpsrc->is_all2all);
 
       // vamsi: We don't need to update routes with periodic reconfiguration: Assumption is that a path is available over time. We just need to fix direct paths, and use when available
       // Route *routeout, *routein;
@@ -569,8 +1229,17 @@ void RegionalTopoManager::resume_regional_tcp_flows()
       assert(tcpsrc->is_all2all);
       int src_node = tcpsrc->_flow_src / NUM_GPU_PER_NODE;
       int dst_node = tcpsrc->_flow_dst / NUM_GPU_PER_NODE;
-      // Only resume flows that have an active OCS connection in the current conn matrix.
-      if (topo->conn[src_node][dst_node] > 0)
+      bool can_resume = false;
+      if (use_rotor_paths())
+      {
+        can_resume = has_mixnet_two_hop_path(topo, tcpsrc->_flow_src, tcpsrc->_flow_dst);
+      }
+      else
+      {
+        // Only resume flows that have an active OCS connection in the current conn matrix.
+        can_resume = topo->conn[src_node][dst_node] > 0;
+      }
+      if (can_resume)
       {
         // vamsi: clear regional pause flag and resume the flow
         tcpsrc->resume_flow_in_region();
@@ -645,7 +1314,194 @@ bool RegionalTopoManager::is_in_region(TcpSrc *tcpsrc) const{
 }
 
 
-// Deeksha: Update conn cycle as per vermilion adjacency matrix generation
+void RegionalTopoManager::compute_schedule_vermilion()
+{
+  conn_cycle.clear();
+  conn_cycle_intervals.clear();
+  // Vermilion
+  const int N = region_size;
+  const int dE = alpha;
+  const int k = 4;
+  const int period = (k * N) / dE;
+  const int scaled_degree = (k - 1) * N;
+  const int expected_matchings = k * N;
+
+  assert(N % 2 == 0);
+  assert(dE > 0);
+  assert((k * N) % dE == 0);
+
+  const Matrix2D<double> &stored_tm =
+      *demandrecorder->traffic_matrix[current_layer_id][region_id];
+  std::vector<std::vector<double>> saturated_demand =
+      load_demand_matrix_for_conn_cycle(stored_tm, N, reverse != 0);
+  simtime_picosec vermilion_cycle_interval =
+      vermilion_cycle_interval_from_demand(saturated_demand, dE, k);
+  if (vermilion_cycle_interval <= 0)
+  {
+    vermilion_cycle_interval =
+        periodic_interval * static_cast<simtime_picosec>(period);
+  }
+  std::vector<std::vector<double>> normalized_demand =
+      normalize_demand_matrix(saturated_demand);
+  std::vector<std::vector<int>> rounded_matrix =
+      floor_scaled_demand_matrix(normalized_demand, scaled_degree);
+
+  std::vector<int> out_left(N, 0);
+  std::vector<int> in_left(N, 0);
+  for (int row = 0; row < N; ++row) {
+    int row_sum = 0;
+    int col_sum = 0;
+    for (int col = 0; col < N; ++col) {
+      row_sum += rounded_matrix[row][col];
+      col_sum += rounded_matrix[col][row];
+    }
+    out_left[row] = scaled_degree - row_sum;
+    in_left[row] = scaled_degree - col_sum;
+    assert(out_left[row] >= 0);
+    assert(in_left[row] >= 0);
+  }
+
+  std::vector<std::vector<int>> config_counts =
+      directed_configuration_model_counts(in_left, out_left, rounded_matrix);
+  std::vector<std::vector<int>> total_edge_cap(
+      N, std::vector<int>(N, 0));
+  for (int i = 0; i < N; ++i) {
+    for (int j = 0; j < N; ++j) {
+      if (i != j) {
+        total_edge_cap[i][j] =
+            rounded_matrix[i][j] + config_counts[i][j] + 1;
+      }
+    }
+  }
+
+  // The +1 off-diagonal base gives each row/column only (N - 1) extra units.
+  // Add one more fixed derangement matching so total_edge_cap becomes exactly
+  // kN-regular and the packed conn cycle does not leave one matching slot empty.
+  for (int i = 0; i < N; ++i) {
+    const int j = (i + 1) % N;
+    total_edge_cap[i][j] += 1;
+  }
+
+  for (int row = 0; row < N; ++row) {
+    int row_sum = 0;
+    int col_sum = 0;
+    for (int col = 0; col < N; ++col) {
+      row_sum += total_edge_cap[row][col];
+      col_sum += total_edge_cap[col][row];
+    }
+    assert(row_sum == expected_matchings);
+    assert(col_sum == expected_matchings);
+  }
+
+  std::vector<std::vector<std::pair<int, int>>> matchings =
+      decompose_into_perfect_matchings(total_edge_cap, expected_matchings);
+  std::vector<std::vector<std::vector<int>>> adjacency(
+      period, std::vector<std::vector<int>>(N, std::vector<int>(N, 0)));
+
+  for (int timeslot = 0; timeslot < period; ++timeslot) {
+    for (int index = 0; index < dE; ++index) {
+      const int matching_idx = timeslot * dE + index;
+      if (matching_idx >= static_cast<int>(matchings.size())) {
+        continue;
+      }
+      for (const auto &edge : matchings[matching_idx]) {
+        adjacency[matching_idx % period][edge.first][edge.second] += 1;
+      }
+    }
+  }
+
+  std::vector<simtime_picosec> slot_intervals =
+      split_interval_evenly(vermilion_cycle_interval, adjacency.size());
+  if (slot_intervals.empty())
+  {
+    slot_intervals.assign(adjacency.size(), periodic_interval);
+  }
+
+  for (int slot = 0; slot < period; ++slot) {
+    for (int row = 0; row < N; ++row) {
+      int row_sum = 0;
+      int col_sum = 0;
+      for (int col = 0; col < N; ++col) {
+        row_sum += adjacency[slot][row][col];
+        col_sum += adjacency[slot][col][row];
+      }
+      assert(row_sum == alpha);
+      assert(col_sum == alpha);
+    }
+    conn_cycle.push_back(adjacency[slot]);
+    conn_cycle_intervals.push_back(slot_intervals[slot]);
+  }
+
+  conn_cycle_ready = !conn_cycle.empty();
+  conn_cycle_idx = 0;
+  active_conn_cycle_interval = conn_cycle_intervals.empty() ? periodic_interval
+                                                            : conn_cycle_intervals[0];
+  std::cout << "Conn cycle initialized from demand matrix with "
+            << conn_cycle.size()
+            << " connection matrices and "
+            << conn_cycle_intervals.size()
+            << " interval entries."
+            << " cycle_interval_ps " << vermilion_cycle_interval
+            << " algorithm " << conn_cycle_algorithm_name(conn_cycle_algorithm)
+            << " reverse: " << reverse
+            << " layer " << current_layer_id
+            << " region " << region_id
+            << " time " << eventlist.now() << std::endl;
+}
+
+void RegionalTopoManager::compute_schedule_birkhoff()
+{
+  conn_cycle.clear();
+  conn_cycle_intervals.clear();
+
+  const int N = region_size;
+  const Matrix2D<double> &stored_tm =
+      *demandrecorder->traffic_matrix[current_layer_id][region_id];
+  std::vector<std::vector<double>> demand =
+      load_demand_matrix_for_conn_cycle(stored_tm, N, reverse != 0);
+  simtime_picosec birkhoff_cycle_interval =
+      birkhoff_cycle_interval_from_demand(demand, alpha);
+  if (birkhoff_cycle_interval <= 0)
+  {
+    birkhoff_cycle_interval = periodic_interval;
+  }
+  std::vector<std::vector<double>> doubly_stochastic_matrix =
+      sinkhorn_balance_demand_matrix(demand);
+  std::vector<WeightedPermutation> decomposition =
+      birkhoff_decompose_matrix(doubly_stochastic_matrix);
+
+  for (const auto &term : decomposition) {
+    std::vector<std::vector<int>> conn(
+        N, std::vector<int>(N, 0));
+    for (const auto &edge : term.matching) {
+      conn[edge.first][edge.second] = alpha;
+    }
+    conn_cycle.push_back(conn);
+  }
+
+  for (const auto &term : decomposition) {
+    conn_cycle_intervals.push_back(
+        interval_from_birkhoff_lambda(term.lambda, birkhoff_cycle_interval));
+  }
+
+  conn_cycle_ready = !conn_cycle.empty();
+  conn_cycle_idx = 0;
+  active_conn_cycle_interval = conn_cycle_intervals.empty() ? periodic_interval
+                                                            : conn_cycle_intervals[0];
+  std::cout << "Conn cycle initialized from demand matrix with "
+            << conn_cycle.size()
+            << " connection matrices and "
+            << conn_cycle_intervals.size()
+            << " interval entries."
+            << " cycle_interval_ps " << birkhoff_cycle_interval
+            << " algorithm " << conn_cycle_algorithm_name(conn_cycle_algorithm)
+            << " reverse: " << reverse
+            << " layer " << current_layer_id
+            << " region " << region_id
+            << " time " << eventlist.now() << std::endl;
+}
+
+// Deeksha: Update conn cycle as per the selected adjacency matrix generation algorithm
 void RegionalTopoManager::prepare_conn_cycle()
 { 
   if (!demandrecorder->check_traffic_matrix(current_layer_id, region_id))
@@ -653,742 +1509,759 @@ void RegionalTopoManager::prepare_conn_cycle()
     return;
   }
 
-  conn_cycle.clear();
-  // vamsi: period is k * n/u
-  int k = 5;
-  int connsize = k * region_size/alpha;
-  std::vector<std::vector<std::vector<int>>> conn(connsize,
-    std::vector<std::vector<int>>(region_size,
-        std::vector<int>(region_size, 0)));
-if(reverse==0){
-conn={
-{
-{0,1,1,0,1,0,1,0},
-{1,0,0,1,0,1,1,0},
-{0,0,0,1,0,1,0,2},
-{1,0,1,0,0,1,1,0},
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,2,0,0,0},
-{1,1,0,1,0,0,0,1},
-{0,1,1,0,1,0,1,0}
-},
-{
-{0,1,1,0,1,0,1,0},
-{1,0,0,1,0,1,1,0},
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,0,1,1,0},
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,1,0,0,1},
-{0,1,0,1,1,0,0,1},
-{1,0,1,0,1,0,1,0}
-},
-{
-{0,1,1,0,1,0,1,0},
-{1,0,0,1,0,1,1,0},
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,0,1,1,0},
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,1,0,0,1},
-{0,1,0,1,1,0,0,1},
-{1,0,1,0,1,0,1,0}
-},
-{
-{0,1,0,0,1,0,1,1},
-{2,0,0,1,0,1,0,0},
-{0,0,0,1,1,1,0,1},
-{1,0,1,0,0,0,1,1},
-{0,1,0,0,0,2,1,0},
-{1,0,1,1,1,0,0,0},
-{0,1,1,1,0,0,0,1},
-{0,1,1,0,1,0,1,0}
-},
-{
-{0,1,0,0,1,0,1,1},
-{2,0,0,1,1,0,0,0},
-{0,0,0,1,1,2,0,0},
-{0,0,1,0,0,0,1,2},
-{1,0,0,0,0,2,1,0},
-{1,1,0,1,1,0,0,0},
-{0,1,2,0,0,0,0,1},
-{0,1,1,1,0,0,1,0}
-},
-{
-{0,1,1,0,1,1,0,0},
-{1,0,0,1,1,0,0,1},
-{0,0,0,1,1,1,0,1},
-{1,0,0,0,1,0,0,2},
-{0,1,1,0,0,0,2,0},
-{1,0,1,1,0,0,1,0},
-{0,1,1,1,0,1,0,0},
-{1,1,0,0,0,1,0,0}
-},
-{
-{0,1,0,1,1,0,1,0},
-{0,0,1,1,1,0,0,1},
-{1,0,0,1,0,1,1,0},
-{1,1,0,0,1,1,0,0},
-{0,0,1,0,0,0,1,1},
-{0,2,0,0,0,0,1,1},
-{1,0,1,0,1,1,0,0},
-{1,0,1,1,0,1,0,0}
-},
-{
-{0,1,0,1,1,0,1,0},
-{0,0,1,1,0,1,0,1},
-{1,0,0,1,1,0,1,0},
-{1,1,0,0,1,1,0,0},
-{0,0,1,0,0,0,1,1},
-{0,2,0,0,0,0,1,1},
-{1,0,1,0,1,1,0,0},
-{1,0,1,1,0,1,0,0}
-},
-{
-{0,1,0,1,0,1,1,0},
-{0,0,1,1,0,1,1,0},
-{1,0,0,0,2,0,0,1},
-{0,2,0,0,0,1,1,0},
-{1,0,2,0,0,0,1,0},
-{0,1,1,1,0,0,0,1},
-{0,0,0,0,2,0,0,1},
-{2,0,0,1,0,1,0,0}
-},
-{
-{0,1,0,1,0,2,0,0},
-{0,0,1,0,2,0,1,0},
-{1,0,0,0,1,0,1,0},
-{1,1,0,0,0,1,0,1},
-{0,0,2,0,0,0,1,0},
-{0,1,0,2,0,0,0,1},
-{1,0,0,0,1,0,0,1},
-{1,1,0,1,0,1,0,0}
-},
-{
-{0,0,1,1,0,1,0,1},
-{0,0,1,0,2,0,0,1},
-{2,1,0,0,0,0,0,0},
-{0,2,0,0,1,0,0,1},
-{1,0,0,1,0,0,2,0},
-{0,0,0,1,0,0,1,1},
-{0,0,1,0,1,1,0,0},
-{1,1,0,1,0,1,0,0}
-},
-{
-{0,0,1,1,0,1,0,1},
-{0,0,1,0,1,0,0,1},
-{2,1,0,0,0,0,0,0},
-{0,1,0,0,1,0,1,0},
-{1,0,0,1,0,0,1,1},
-{0,0,0,1,0,0,1,1},
-{0,0,1,0,1,1,0,0},
-{1,1,0,0,0,1,0,0}
-},
-{
-{0,0,1,0,1,1,0,1},
-{0,0,0,1,1,0,0,1},
-{0,1,0,0,0,0,2,0},
-{0,1,0,0,1,0,0,1},
-{2,0,1,1,0,0,0,0},
-{0,0,0,1,0,0,1,1},
-{1,0,1,0,0,1,0,0},
-{1,1,0,0,0,1,0,0}
-},
-{
-{0,0,1,0,1,1,0,1},
-{0,0,0,1,1,0,0,1},
-{0,1,0,0,0,0,2,0},
-{0,1,0,0,1,0,0,1},
-{2,0,1,1,0,0,0,0},
-{0,0,0,1,0,0,1,1},
-{2,0,1,0,0,0,0,0},
-{0,1,0,0,0,2,0,0}
-},
-{
-{0,0,1,0,1,0,1,0},
-{0,0,0,1,0,1,0,1},
-{1,1,0,0,0,1,0,0},
-{0,0,0,0,1,0,1,1},
-{0,0,1,1,0,0,0,1},
-{1,1,0,0,0,0,1,0},
-{1,1,0,1,0,0,0,0},
-{0,0,1,0,1,1,0,0}
-},
-{
-{0,0,1,0,1,0,0,1},
-{0,0,0,1,0,1,1,0},
-{0,0,0,0,0,1,1,1},
-{1,0,0,0,0,1,1,0},
-{0,1,0,1,0,0,0,1},
-{1,0,1,0,1,0,0,0},
-{1,1,0,1,0,0,0,0},
-{0,1,1,0,1,0,0,0}
-}
-};
-
-}
-else{
-  conn={
-{
-{0,1,1,0,0,0,1,1},
-{1,0,0,0,1,1,0,1},
-{0,1,0,1,0,1,0,1},
-{0,1,1,0,1,0,1,0},
-{1,0,1,1,0,1,0,0},
-{0,1,0,1,1,0,1,0},
-{1,0,1,0,0,1,0,1},
-{1,0,0,1,1,0,1,0}
-},
-{
-{0,1,1,0,0,0,1,1},
-{1,0,0,0,1,1,0,1},
-{0,0,0,2,0,1,0,1},
-{0,1,1,0,1,0,1,0},
-{0,1,0,2,0,1,0,0},
-{1,0,1,0,1,0,1,0},
-{1,1,0,0,0,1,0,1},
-{1,0,1,0,1,0,1,0}
-},
-{
-{0,1,1,0,0,1,0,1},
-{1,0,0,0,1,1,0,1},
-{0,0,0,2,1,0,0,1},
-{1,1,1,0,0,0,1,0},
-{0,1,0,2,0,1,0,0},
-{0,1,1,0,1,0,1,0},
-{1,0,0,0,0,1,0,1},
-{1,0,1,0,1,0,1,0}
-},
-{
-{0,1,0,1,1,1,0,0},
-{1,0,1,0,0,1,0,1},
-{0,0,0,1,1,0,1,1},
-{1,0,1,0,1,0,0,1},
-{0,2,0,1,0,1,0,0},
-{0,0,1,0,1,0,1,0},
-{0,1,0,1,0,1,0,1},
-{2,0,1,0,0,0,1,0}
-},
-{
-{0,1,0,1,1,1,0,0},
-{1,0,1,0,0,1,0,1},
-{1,0,0,1,1,0,1,0},
-{1,0,1,0,1,0,0,1},
-{0,1,0,0,0,1,0,1},
-{0,0,1,1,1,0,1,0},
-{0,1,0,1,0,1,0,1},
-{1,1,1,0,0,0,1,0}
-},
-{
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,0,1,0,1},
-{1,0,0,1,1,0,1,0},
-{2,0,1,0,1,0,0,0},
-{0,1,0,0,0,1,0,1},
-{0,0,1,1,1,0,1,0},
-{0,1,0,1,0,1,0,1},
-{0,1,1,0,1,0,1,0}
-},
-{
-{0,1,0,1,0,1,0,1},
-{0,0,1,0,0,0,1,2},
-{0,1,0,1,1,1,0,0},
-{2,0,1,0,0,1,0,0},
-{0,1,0,0,0,0,1,1},
-{1,0,1,1,1,0,0,0},
-{0,1,0,1,1,1,0,0},
-{1,0,1,0,1,0,1,0}
-},
-{
-{0,1,0,1,0,1,0,1},
-{1,0,1,0,1,0,1,0},
-{0,1,0,1,0,1,0,0},
-{1,0,1,0,0,1,0,1},
-{1,1,0,0,0,0,1,1},
-{1,0,1,0,0,0,0,1},
-{0,1,0,1,2,0,0,0},
-{0,0,1,0,1,1,1,0}
-},
-{
-{0,1,0,1,0,0,1,1},
-{0,0,2,0,0,0,1,0},
-{0,0,0,1,1,0,1,1},
-{0,0,0,0,1,2,0,1},
-{1,1,0,1,0,0,0,1},
-{2,0,0,0,0,0,1,0},
-{0,0,1,1,1,1,0,0},
-{1,1,0,0,1,0,0,0}
-},
-{
-{0,0,1,1,0,0,1,1},
-{0,0,0,1,1,0,1,0},
-{1,0,0,0,0,1,1,0},
-{1,1,0,0,0,1,0,1},
-{1,0,2,0,0,0,1,0},
-{0,1,0,0,0,0,0,2},
-{1,0,0,1,1,0,0,0},
-{0,1,0,1,1,1,0,0}
-},
-{
-{0,0,1,1,1,0,1,0},
-{0,0,0,1,1,0,1,0},
-{1,0,0,0,0,1,1,0},
-{1,1,0,0,0,1,0,1},
-{0,0,2,0,0,0,1,0},
-{1,0,0,0,0,0,0,2},
-{1,0,0,1,1,0,0,0},
-{0,2,0,1,0,1,0,0}
-},
-{
-{0,0,1,1,1,0,1,0},
-{0,0,0,1,1,0,1,0},
-{1,0,0,0,0,1,1,0},
-{0,1,0,0,0,1,0,1},
-{1,0,1,1,0,0,1,0},
-{1,0,0,0,0,0,0,2},
-{1,0,1,0,1,0,0,0},
-{0,2,0,1,0,1,0,0}
-},
-{
-{0,0,1,0,2,0,1,0},
-{0,0,0,1,0,1,1,0},
-{1,1,0,0,0,1,0,0},
-{0,1,0,0,0,0,1,1},
-{2,0,1,0,0,0,1,0},
-{0,1,0,1,0,0,0,1},
-{0,0,1,0,1,0,0,1},
-{1,0,0,1,0,1,0,0}
-},
-{
-{0,0,1,0,1,1,1,0},
-{0,0,0,1,1,1,0,0},
-{1,1,0,0,0,0,1,0},
-{0,1,0,0,0,0,1,1},
-{1,0,0,0,0,0,1,1},
-{1,1,0,1,0,0,0,1},
-{1,0,1,0,1,0,0,0},
-{0,0,1,1,0,1,0,0}
-},
-{
-{0,0,1,0,1,1,0,1},
-{0,0,0,1,1,1,0,0},
-{1,1,0,0,0,0,1,0},
-{0,1,0,0,0,0,1,1},
-{1,0,0,0,0,0,1,1},
-{1,1,0,1,0,0,0,1},
-{1,0,1,0,1,0,0,0},
-{0,0,1,1,0,1,0,0}
-},
-{
-{0,0,1,0,1,0,1,0},
-{0,0,0,1,0,1,0,1},
-{1,1,0,0,0,1,0,0},
-{0,1,0,0,1,0,1,0},
-{1,0,0,0,0,0,0,2},
-{0,1,0,1,0,0,1,0},
-{1,0,1,0,1,0,0,0},
-{0,0,1,1,0,1,0,0}
-}
-};
-}
-
-
-  // conn = {
-  //   {// conn[5]
-  //    {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1}
-  //    },
-  //   {  // conn[5]
-  //    {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1}
-  //    },
-  //    {// conn[5]
-  //    {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1}
-  //    },
-  //   {  // conn[5]
-  //    {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1}
-  //    },
-     
-  //   { // conn[5]
-  //    {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1}
-  //    },
-  //   { // conn[5]
-  //    {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1},
-  //      {1,1,1,1,1,1,1,1},
-  //     {1,1,1,1,1,1,1,1}
-  //    } 
-  //   };
-
-  // conn = {
-  //   { // conn[0]
-  //     {1,1,2,1,1,0,1,0},
-  //     {1,1,0,2,0,1,2,0},
-  //     {2,0,1,1,0,1,0,1},
-  //     {1,2,1,1,0,1,0,0},
-  //     {1,0,0,0,2,0,1,1},
-  //     {0,1,1,1,0,1,1,2},
-  //     {1,2,0,0,1,1,1,1},
-  //     {0,0,1,0,1,2,1,1}
-  //   },
-  //   { // conn[1]
-  //     {1,0,1,1,0,1,1,1},
-  //     {0,2,0,1,0,1,1,1},
-  //     {1,0,1,1,1,1,1,1},
-  //     {1,1,1,1,1,2,0,0},
-  //     {0,0,1,1,1,1,1,1},
-  //     {1,1,1,2,1,1,0,0},
-  //     {1,1,1,0,1,0,0,2},
-  //     {1,1,1,0,1,0,2,0}
-  //   },
-  //   { // conn[2]
-  //     {0,1,1,1,1,0,1,1},
-  //     {1,0,0,1,0,1,1,1},
-  //     {1,0,1,1,1,2,0,1},
-  //     {1,1,1,0,1,1,1,0},
-  //     {1,0,1,1,0,1,1,1},
-  //     {0,1,2,1,1,0,1,0},
-  //     {1,1,0,1,1,1,0,1},
-  //     {1,1,1,0,1,0,1,1}
-  //   },
-  //   { // conn[3]
-  //     {0,1,0,1,1,1,1,1},
-  //     {1,0,1,1,1,1,1,0},
-  //     {0,1,0,1,2,0,1,0},
-  //     {1,1,1,0,0,0,1,1},
-  //     {1,1,2,0,1,0,0,1},
-  //     {1,1,0,0,0,0,1,1},
-  //     {1,1,1,1,0,1,0,0},
-  //     {1,0,0,1,1,1,0,1}
-  //   },
-  //   { // conn[4]
-  //     {0,1,0,1,1,1,0,2},
-  //     {1,0,1,0,1,1,1,1},
-  //     {0,1,0,0,2,0,1,1},
-  //     {1,0,0,0,1,1,2,1},
-  //     {1,1,2,1,0,0,0,1},
-  //     {1,1,0,1,0,0,1,1},
-  //     {0,1,1,2,0,1,0,0},
-  //     {2,1,1,1,1,1,0,0}
-  //   },
-  //   { // conn[5]
-  //     {0,1,1,1,0,1,0,1},
-  //     {1,0,1,0,1,1,2,1},
-  //     {1,1,0,1,0,1,1,1},
-  //     {1,0,1,0,2,1,0,1},
-  //     {0,1,0,2,0,0,2,1},
-  //     {1,1,1,1,0,0,1,1},
-  //     {0,2,1,0,2,1,0,0},
-  //     {1,1,1,1,1,1,0,0}
-  //   }
-  // };
-
-  // conn = {
-  //   { // conn[0]
-  //     {1,0,0,1,1,0,1,0},
-  //     {0,1,1,0,0,1,0,1},
-  //     {1,1,1,0,0,1,0,0},
-  //     {0,1,1,1,0,0,0,1},
-  //     {1,0,0,0,2,0,1,0},
-  //     {0,1,1,0,0,1,1,0},
-  //     {0,0,0,2,0,1,1,0},
-  //     {1,0,0,0,1,0,0,2}
-  //   },
- 
-  //   { // conn[2]
-  //     {1,0,0,1,1,0,1,0},
-  //     {0,1,1,0,1,1,0,0},
-  //     {0,0,1,1,0,0,0,2},
-  //     {1,0,0,0,1,1,1,0},
-  //     {0,1,0,1,0,1,1,0},
-  //     {1,0,0,0,1,1,0,1},
-  //     {1,1,1,0,0,0,0,1},
-  //     {0,1,1,1,0,0,1,0}
-  //   },
-    
-  //   { // conn[4]
-  //     {0,1,0,1,1,0,1,0},
-  //     {1,0,1,0,1,0,1,0},
-  //     {0,0,1,1,0,0,0,2},
-  //     {1,0,0,0,1,1,1,0},
-  //     {0,1,0,1,0,1,0,1},
-  //     {1,0,1,0,1,1,0,0},
-  //     {1,1,1,0,0,0,0,1},
-  //     {0,1,0,1,0,1,1,0}
-  //   },
-    
-  //   { // conn[6]
-  //     {0,1,0,0,1,1,0,1},
-  //     {1,0,0,1,1,0,1,0},
-  //     {0,1,1,1,0,1,0,0},
-  //     {1,0,1,0,1,0,0,1},
-  //     {0,1,1,1,0,0,1,0},
-  //     {1,0,0,0,0,0,2,1},
-  //     {0,0,1,0,1,2,0,0},
-  //     {1,1,0,1,0,0,0,1}
-  //   },
-    
-  //   { // conn[8]
-  //     {0,1,0,0,1,1,1,0},
-  //     {1,0,0,1,1,0,0,1},
-  //     {0,1,1,0,0,1,1,0},
-  //     {0,1,1,0,0,1,1,0},
-  //     {1,0,1,0,1,0,0,1},
-  //     {0,0,1,2,0,0,0,1},
-  //     {2,0,0,1,0,0,0,1},
-  //     {0,1,0,0,1,1,1,0}
-  //   },
-    
-  //   { // conn[10]
-  //     {0,0,1,0,1,1,0,1},
-  //     {0,1,0,1,0,0,1,1},
-  //     {1,0,0,0,1,0,2,0},
-  //     {1,0,1,0,0,2,0,0},
-  //     {1,1,1,0,1,0,0,0},
-  //     {0,1,0,2,0,0,0,1},
-  //     {1,1,0,1,0,0,0,1},
-  //     {0,0,1,0,1,1,1,0}
-  //   },
-    
-  // };
-//Deeksha: This is for reverse
-  // conn = {
-  //   { // conn[0]
-  //     {1,1,0,1,0,1,0,0},
-  //     {0,1,0,0,1,0,1,1},
-  //     {1,0,1,0,2,0,0,0},
-  //     {1,0,1,1,0,1,0,0},
-  //     {0,0,1,1,1,0,0,1},
-  //     {0,0,1,0,0,1,1,1},
-  //     {1,1,0,1,0,0,1,0},
-  //     {0,1,0,0,0,1,1,1}
-  //   },
-  //   { // conn[1]
-  //     {1,0,1,0,0,1,1,0},
-  //     {0,1,0,0,1,1,0,1},
-  //     {0,1,1,0,0,0,0,2},
-  //     {1,1,0,1,1,0,0,0},
-  //     {0,1,0,1,1,0,1,0},
-  //     {0,0,2,0,0,1,1,0},
-  //     {1,0,0,1,1,0,1,0},
-  //     {1,0,0,1,0,1,0,1}
-  //   },
-  //   { // conn[2]
-  //     {1,0,1,1,0,0,1,0},
-  //     {0,1,0,1,0,1,0,1},
-  //     {0,0,1,0,1,1,1,0},
-  //     {0,1,1,0,1,0,0,1},
-  //     {1,0,0,1,0,1,0,1},
-  //     {1,1,0,1,0,0,1,0},
-  //     {1,0,0,0,2,1,0,0},
-  //     {0,1,1,0,0,0,1,1}
-  //   },
-  //   { // conn[3]
-  //     {0,0,0,1,1,0,1,1},
-  //     {1,1,0,1,0,1,0,0},
-  //     {0,0,0,1,1,1,0,1},
-  //     {1,0,1,0,0,0,2,0},
-  //     {0,1,1,0,0,1,0,1},
-  //     {1,0,1,0,1,0,0,1},
-  //     {0,1,1,1,0,0,1,0},
-  //     {1,1,0,0,1,1,0,0}
-  //   },
-  //   { // conn[4]
-  //     {1,0,0,1,1,0,0,1},
-  //     {0,0,2,1,0,1,0,0},
-  //     {1,1,0,0,0,1,1,0},
-  //     {1,0,0,0,1,0,0,2},
-  //     {0,1,0,1,0,0,2,0},
-  //     {0,1,1,0,1,0,1,0},
-  //     {0,1,1,1,0,0,0,1},
-  //     {1,0,0,0,1,2,0,0}
-  //   },
-  //   { // conn[5]
-  //     {0,1,0,1,1,0,0,1},
-  //     {1,0,1,0,0,1,1,0},
-  //     {2,0,0,1,0,1,0,0},
-  //     {0,0,2,0,0,0,1,1},
-  //     {1,0,0,0,0,1,1,1},
-  //     {0,2,0,0,2,0,0,0},
-  //     {0,1,1,1,0,0,0,1},
-  //     {0,0,0,1,1,1,1,0}
-  //   }
-  // };
-  // conn = {
-  //   { // conn[0]
-  //     {1,0,1,0,1,0,1,0},
-  //     {0,1,1,0,1,0,1,0},
-  //     {1,1,1,0,0,1,0,0},
-  //     {0,1,0,1,1,0,0,1},
-  //     {0,1,0,0,1,1,1,0},
-  //     {1,0,0,1,0,1,0,1},
-  //     {0,0,0,2,0,0,1,1},
-  //     {1,0,1,0,0,1,0,1}
-  //   },
-  //   { // conn[1]
-  //     {1,0,1,0,0,1,1,0},
-  //     {0,1,0,1,0,1,0,1},
-  //     {1,0,1,1,0,0,0,1},
-  //     {1,1,0,1,0,0,1,0},
-  //     {0,1,0,0,1,1,1,0},
-  //     {0,0,1,0,1,1,0,1},
-  //     {1,0,0,1,1,0,1,0},
-  //     {0,1,1,0,1,0,0,1}
-  //   },
-  //   { // conn[2]
-  //     {1,0,0,1,0,1,1,0},
-  //     {0,0,1,1,1,0,0,1},
-  //     {1,1,1,0,0,0,0,1},
-  //     {0,0,0,1,0,1,1,1},
-  //     {1,1,0,0,1,1,0,0},
-  //     {0,1,0,0,1,1,1,0},
-  //     {0,1,1,0,1,0,0,1},
-  //     {1,0,1,1,0,0,1,0}
-  //   },
-  //   { // conn[3]
-  //     {0,1,0,1,0,1,0,1},
-  //     {2,0,0,1,1,0,0,0},
-  //     {1,0,1,0,1,0,1,0},
-  //     {0,0,1,0,1,1,0,1},
-  //     {1,0,1,1,0,0,0,1},
-  //     {0,1,0,0,0,1,2,0},
-  //     {0,1,0,1,0,1,0,1},
-  //     {0,1,1,0,1,0,1,0}
-  //   },
-  //   { // conn[4]
-  //     {0,1,0,1,0,0,1,1},
-  //     {2,0,0,1,0,1,0,0},
-  //     {0,0,1,1,2,0,0,0},
-  //     {1,0,0,0,1,0,1,1},
-  //     {1,1,1,0,0,1,0,0},
-  //     {0,1,0,1,0,0,1,1},
-  //     {0,0,1,0,0,2,0,1},
-  //     {0,1,1,0,1,0,1,0}
-  //   },
-  //   { // conn[5]
-  //     {0,0,1,0,1,0,1,1},
-  //     {0,0,1,0,1,1,1,0},
-  //     {1,1,0,1,0,1,0,0},
-  //     {1,1,1,0,1,0,0,0},
-  //     {0,0,0,0,0,1,2,1},
-  //     {1,0,1,1,0,0,0,1},
-  //     {0,2,0,1,0,0,0,1},
-  //     {1,0,0,1,1,1,0,0}
-  //   }
-  // };
-// conn = {
-//     { // conn[0]
-//       {1,1,1,0,0,1,0,0},
-//       {0,1,1,1,0,0,1,0},
-//       {1,0,1,0,1,0,1,0},
-//       {1,0,0,1,1,1,0,0},
-//       {0,0,0,1,1,0,1,1},
-//       {0,1,1,0,0,1,0,1},
-//       {1,1,0,0,0,0,1,1},
-//       {0,0,0,1,1,1,0,1}
-//     },
-//     { // conn[1]
-//       {0,2,0,1,0,1,0,0},
-//       {0,0,1,0,1,0,1,1},
-//       {1,0,1,0,1,0,0,1},
-//       {0,0,0,1,0,1,1,1},
-//       {0,1,1,1,1,0,0,0},
-//       {0,1,0,1,0,1,0,1},
-//       {1,0,1,0,1,0,1,0},
-//       {2,0,0,0,0,1,1,0}
-//     },
-//     { // conn[2]
-//       {0,2,0,0,1,0,0,1},
-//       {0,0,0,1,0,1,1,1},
-//       {1,0,1,0,1,0,0,1},
-//       {2,0,0,1,0,1,0,0},
-//       {0,1,1,1,1,0,0,0},
-//       {0,0,1,1,0,0,1,1},
-//       {0,1,1,0,1,1,0,0},
-//       {1,0,0,0,0,1,2,0}
-//     },
-//     { // conn[3]
-//       {0,0,1,0,1,1,0,1},
-//       {1,0,0,1,0,1,1,0},
-//       {0,1,1,0,1,0,1,0},
-//       {1,1,0,1,0,0,0,1},
-//       {0,0,0,0,0,2,1,1},
-//       {0,1,1,0,1,0,0,1},
-//       {1,0,1,1,0,0,1,0},
-//       {1,1,0,1,1,0,0,0}
-//     },
-//     { // conn[4]
-//       {0,0,1,0,1,0,1,1},
-//       {1,0,0,1,1,1,0,0},
-//       {0,1,0,1,0,1,1,0},
-//       {1,1,1,0,0,0,0,1},
-//       {1,0,0,0,0,2,0,1},
-//       {1,0,1,1,0,0,1,0},
-//       {0,1,0,1,1,0,0,1},
-//       {0,1,1,0,1,0,1,0}
-//     },
-//     { // conn[5]
-//       {0,0,1,0,0,1,1,1},
-//       {1,0,0,1,2,0,0,0},
-//       {0,0,0,1,0,1,1,1},
-//       {0,0,0,0,1,1,1,1},
-//       {2,1,1,0,0,0,0,0},
-//       {1,0,1,1,0,0,1,0},
-//       {0,2,0,0,0,1,0,1},
-//       {0,1,1,1,1,0,0,0}
-//     }
-//   };
-  //std::vector<int> avail_conn(region_size, alpha);
-  for (int k = 0; k < conn.size(); k++)  //Deeksha :CHeck this later
+  switch (conn_cycle_algorithm)
   {
-    // for(int i = 0; i < region_size; i++) {
-    //   for(int j = 0; j < region_size; j++) {
-    //     // Initialize connection matrix
-    //       conn[k][j][i] = conn[k][i][j];       
-    //   }
-    // }
-        
-    conn_cycle.push_back(conn[k]);
+  case CONN_CYCLE_VERMILION:
+    compute_schedule_vermilion();
+    return;
+  case CONN_CYCLE_ROTOR:
+    rotor_conn_cycle();
+    return;
+  case CONN_CYCLE_BIRKHOFF:
+    compute_schedule_birkhoff();
+    return;
+  default:
+    compute_schedule_vermilion();
+    return;
   }
+
+//   // vamsi: period is k * n/u
+//   int k = 5;
+//   int connsize = k * region_size/alpha;
+//   std::vector<std::vector<std::vector<int>>> conn(connsize,
+//     std::vector<std::vector<int>>(region_size,
+//         std::vector<int>(region_size, 0)));
+// if(reverse==0){
+// conn={
+// {
+// {0,1,1,0,1,0,1,0},
+// {1,0,0,1,0,1,1,0},
+// {0,0,0,1,0,1,0,2},
+// {1,0,1,0,0,1,1,0},
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,2,0,0,0},
+// {1,1,0,1,0,0,0,1},
+// {0,1,1,0,1,0,1,0}
+// },
+// {
+// {0,1,1,0,1,0,1,0},
+// {1,0,0,1,0,1,1,0},
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,0,1,1,0},
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,1,0,0,1},
+// {0,1,0,1,1,0,0,1},
+// {1,0,1,0,1,0,1,0}
+// },
+// {
+// {0,1,1,0,1,0,1,0},
+// {1,0,0,1,0,1,1,0},
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,0,1,1,0},
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,1,0,0,1},
+// {0,1,0,1,1,0,0,1},
+// {1,0,1,0,1,0,1,0}
+// },
+// {
+// {0,1,0,0,1,0,1,1},
+// {2,0,0,1,0,1,0,0},
+// {0,0,0,1,1,1,0,1},
+// {1,0,1,0,0,0,1,1},
+// {0,1,0,0,0,2,1,0},
+// {1,0,1,1,1,0,0,0},
+// {0,1,1,1,0,0,0,1},
+// {0,1,1,0,1,0,1,0}
+// },
+// {
+// {0,1,0,0,1,0,1,1},
+// {2,0,0,1,1,0,0,0},
+// {0,0,0,1,1,2,0,0},
+// {0,0,1,0,0,0,1,2},
+// {1,0,0,0,0,2,1,0},
+// {1,1,0,1,1,0,0,0},
+// {0,1,2,0,0,0,0,1},
+// {0,1,1,1,0,0,1,0}
+// },
+// {
+// {0,1,1,0,1,1,0,0},
+// {1,0,0,1,1,0,0,1},
+// {0,0,0,1,1,1,0,1},
+// {1,0,0,0,1,0,0,2},
+// {0,1,1,0,0,0,2,0},
+// {1,0,1,1,0,0,1,0},
+// {0,1,1,1,0,1,0,0},
+// {1,1,0,0,0,1,0,0}
+// },
+// {
+// {0,1,0,1,1,0,1,0},
+// {0,0,1,1,1,0,0,1},
+// {1,0,0,1,0,1,1,0},
+// {1,1,0,0,1,1,0,0},
+// {0,0,1,0,0,0,1,1},
+// {0,2,0,0,0,0,1,1},
+// {1,0,1,0,1,1,0,0},
+// {1,0,1,1,0,1,0,0}
+// },
+// {
+// {0,1,0,1,1,0,1,0},
+// {0,0,1,1,0,1,0,1},
+// {1,0,0,1,1,0,1,0},
+// {1,1,0,0,1,1,0,0},
+// {0,0,1,0,0,0,1,1},
+// {0,2,0,0,0,0,1,1},
+// {1,0,1,0,1,1,0,0},
+// {1,0,1,1,0,1,0,0}
+// },
+// {
+// {0,1,0,1,0,1,1,0},
+// {0,0,1,1,0,1,1,0},
+// {1,0,0,0,2,0,0,1},
+// {0,2,0,0,0,1,1,0},
+// {1,0,2,0,0,0,1,0},
+// {0,1,1,1,0,0,0,1},
+// {0,0,0,0,2,0,0,1},
+// {2,0,0,1,0,1,0,0}
+// },
+// {
+// {0,1,0,1,0,2,0,0},
+// {0,0,1,0,2,0,1,0},
+// {1,0,0,0,1,0,1,0},
+// {1,1,0,0,0,1,0,1},
+// {0,0,2,0,0,0,1,0},
+// {0,1,0,2,0,0,0,1},
+// {1,0,0,0,1,0,0,1},
+// {1,1,0,1,0,1,0,0}
+// },
+// {
+// {0,0,1,1,0,1,0,1},
+// {0,0,1,0,2,0,0,1},
+// {2,1,0,0,0,0,0,0},
+// {0,2,0,0,1,0,0,1},
+// {1,0,0,1,0,0,2,0},
+// {0,0,0,1,0,0,1,1},
+// {0,0,1,0,1,1,0,0},
+// {1,1,0,1,0,1,0,0}
+// },
+// {
+// {0,0,1,1,0,1,0,1},
+// {0,0,1,0,1,0,0,1},
+// {2,1,0,0,0,0,0,0},
+// {0,1,0,0,1,0,1,0},
+// {1,0,0,1,0,0,1,1},
+// {0,0,0,1,0,0,1,1},
+// {0,0,1,0,1,1,0,0},
+// {1,1,0,0,0,1,0,0}
+// },
+// {
+// {0,0,1,0,1,1,0,1},
+// {0,0,0,1,1,0,0,1},
+// {0,1,0,0,0,0,2,0},
+// {0,1,0,0,1,0,0,1},
+// {2,0,1,1,0,0,0,0},
+// {0,0,0,1,0,0,1,1},
+// {1,0,1,0,0,1,0,0},
+// {1,1,0,0,0,1,0,0}
+// },
+// {
+// {0,0,1,0,1,1,0,1},
+// {0,0,0,1,1,0,0,1},
+// {0,1,0,0,0,0,2,0},
+// {0,1,0,0,1,0,0,1},
+// {2,0,1,1,0,0,0,0},
+// {0,0,0,1,0,0,1,1},
+// {2,0,1,0,0,0,0,0},
+// {0,1,0,0,0,2,0,0}
+// },
+// {
+// {0,0,1,0,1,0,1,0},
+// {0,0,0,1,0,1,0,1},
+// {1,1,0,0,0,1,0,0},
+// {0,0,0,0,1,0,1,1},
+// {0,0,1,1,0,0,0,1},
+// {1,1,0,0,0,0,1,0},
+// {1,1,0,1,0,0,0,0},
+// {0,0,1,0,1,1,0,0}
+// },
+// {
+// {0,0,1,0,1,0,0,1},
+// {0,0,0,1,0,1,1,0},
+// {0,0,0,0,0,1,1,1},
+// {1,0,0,0,0,1,1,0},
+// {0,1,0,1,0,0,0,1},
+// {1,0,1,0,1,0,0,0},
+// {1,1,0,1,0,0,0,0},
+// {0,1,1,0,1,0,0,0}
+// }
+// };
+
+// }
+// else{
+//   conn={
+// {
+// {0,1,1,0,0,0,1,1},
+// {1,0,0,0,1,1,0,1},
+// {0,1,0,1,0,1,0,1},
+// {0,1,1,0,1,0,1,0},
+// {1,0,1,1,0,1,0,0},
+// {0,1,0,1,1,0,1,0},
+// {1,0,1,0,0,1,0,1},
+// {1,0,0,1,1,0,1,0}
+// },
+// {
+// {0,1,1,0,0,0,1,1},
+// {1,0,0,0,1,1,0,1},
+// {0,0,0,2,0,1,0,1},
+// {0,1,1,0,1,0,1,0},
+// {0,1,0,2,0,1,0,0},
+// {1,0,1,0,1,0,1,0},
+// {1,1,0,0,0,1,0,1},
+// {1,0,1,0,1,0,1,0}
+// },
+// {
+// {0,1,1,0,0,1,0,1},
+// {1,0,0,0,1,1,0,1},
+// {0,0,0,2,1,0,0,1},
+// {1,1,1,0,0,0,1,0},
+// {0,1,0,2,0,1,0,0},
+// {0,1,1,0,1,0,1,0},
+// {1,0,0,0,0,1,0,1},
+// {1,0,1,0,1,0,1,0}
+// },
+// {
+// {0,1,0,1,1,1,0,0},
+// {1,0,1,0,0,1,0,1},
+// {0,0,0,1,1,0,1,1},
+// {1,0,1,0,1,0,0,1},
+// {0,2,0,1,0,1,0,0},
+// {0,0,1,0,1,0,1,0},
+// {0,1,0,1,0,1,0,1},
+// {2,0,1,0,0,0,1,0}
+// },
+// {
+// {0,1,0,1,1,1,0,0},
+// {1,0,1,0,0,1,0,1},
+// {1,0,0,1,1,0,1,0},
+// {1,0,1,0,1,0,0,1},
+// {0,1,0,0,0,1,0,1},
+// {0,0,1,1,1,0,1,0},
+// {0,1,0,1,0,1,0,1},
+// {1,1,1,0,0,0,1,0}
+// },
+// {
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,0,1,0,1},
+// {1,0,0,1,1,0,1,0},
+// {2,0,1,0,1,0,0,0},
+// {0,1,0,0,0,1,0,1},
+// {0,0,1,1,1,0,1,0},
+// {0,1,0,1,0,1,0,1},
+// {0,1,1,0,1,0,1,0}
+// },
+// {
+// {0,1,0,1,0,1,0,1},
+// {0,0,1,0,0,0,1,2},
+// {0,1,0,1,1,1,0,0},
+// {2,0,1,0,0,1,0,0},
+// {0,1,0,0,0,0,1,1},
+// {1,0,1,1,1,0,0,0},
+// {0,1,0,1,1,1,0,0},
+// {1,0,1,0,1,0,1,0}
+// },
+// {
+// {0,1,0,1,0,1,0,1},
+// {1,0,1,0,1,0,1,0},
+// {0,1,0,1,0,1,0,0},
+// {1,0,1,0,0,1,0,1},
+// {1,1,0,0,0,0,1,1},
+// {1,0,1,0,0,0,0,1},
+// {0,1,0,1,2,0,0,0},
+// {0,0,1,0,1,1,1,0}
+// },
+// {
+// {0,1,0,1,0,0,1,1},
+// {0,0,2,0,0,0,1,0},
+// {0,0,0,1,1,0,1,1},
+// {0,0,0,0,1,2,0,1},
+// {1,1,0,1,0,0,0,1},
+// {2,0,0,0,0,0,1,0},
+// {0,0,1,1,1,1,0,0},
+// {1,1,0,0,1,0,0,0}
+// },
+// {
+// {0,0,1,1,0,0,1,1},
+// {0,0,0,1,1,0,1,0},
+// {1,0,0,0,0,1,1,0},
+// {1,1,0,0,0,1,0,1},
+// {1,0,2,0,0,0,1,0},
+// {0,1,0,0,0,0,0,2},
+// {1,0,0,1,1,0,0,0},
+// {0,1,0,1,1,1,0,0}
+// },
+// {
+// {0,0,1,1,1,0,1,0},
+// {0,0,0,1,1,0,1,0},
+// {1,0,0,0,0,1,1,0},
+// {1,1,0,0,0,1,0,1},
+// {0,0,2,0,0,0,1,0},
+// {1,0,0,0,0,0,0,2},
+// {1,0,0,1,1,0,0,0},
+// {0,2,0,1,0,1,0,0}
+// },
+// {
+// {0,0,1,1,1,0,1,0},
+// {0,0,0,1,1,0,1,0},
+// {1,0,0,0,0,1,1,0},
+// {0,1,0,0,0,1,0,1},
+// {1,0,1,1,0,0,1,0},
+// {1,0,0,0,0,0,0,2},
+// {1,0,1,0,1,0,0,0},
+// {0,2,0,1,0,1,0,0}
+// },
+// {
+// {0,0,1,0,2,0,1,0},
+// {0,0,0,1,0,1,1,0},
+// {1,1,0,0,0,1,0,0},
+// {0,1,0,0,0,0,1,1},
+// {2,0,1,0,0,0,1,0},
+// {0,1,0,1,0,0,0,1},
+// {0,0,1,0,1,0,0,1},
+// {1,0,0,1,0,1,0,0}
+// },
+// {
+// {0,0,1,0,1,1,1,0},
+// {0,0,0,1,1,1,0,0},
+// {1,1,0,0,0,0,1,0},
+// {0,1,0,0,0,0,1,1},
+// {1,0,0,0,0,0,1,1},
+// {1,1,0,1,0,0,0,1},
+// {1,0,1,0,1,0,0,0},
+// {0,0,1,1,0,1,0,0}
+// },
+// {
+// {0,0,1,0,1,1,0,1},
+// {0,0,0,1,1,1,0,0},
+// {1,1,0,0,0,0,1,0},
+// {0,1,0,0,0,0,1,1},
+// {1,0,0,0,0,0,1,1},
+// {1,1,0,1,0,0,0,1},
+// {1,0,1,0,1,0,0,0},
+// {0,0,1,1,0,1,0,0}
+// },
+// {
+// {0,0,1,0,1,0,1,0},
+// {0,0,0,1,0,1,0,1},
+// {1,1,0,0,0,1,0,0},
+// {0,1,0,0,1,0,1,0},
+// {1,0,0,0,0,0,0,2},
+// {0,1,0,1,0,0,1,0},
+// {1,0,1,0,1,0,0,0},
+// {0,0,1,1,0,1,0,0}
+// }
+// };
+// }
+
+
+//   // conn = {
+//   //   {// conn[5]
+//   //    {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1}
+//   //    },
+//   //   {  // conn[5]
+//   //    {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1}
+//   //    },
+//   //    {// conn[5]
+//   //    {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1}
+//   //    },
+//   //   {  // conn[5]
+//   //    {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1}
+//   //    },
+     
+//   //   { // conn[5]
+//   //    {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1}
+//   //    },
+//   //   { // conn[5]
+//   //    {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1},
+//   //      {1,1,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,1,1,1}
+//   //    } 
+//   //   };
+
+//   // conn = {
+//   //   { // conn[0]
+//   //     {1,1,2,1,1,0,1,0},
+//   //     {1,1,0,2,0,1,2,0},
+//   //     {2,0,1,1,0,1,0,1},
+//   //     {1,2,1,1,0,1,0,0},
+//   //     {1,0,0,0,2,0,1,1},
+//   //     {0,1,1,1,0,1,1,2},
+//   //     {1,2,0,0,1,1,1,1},
+//   //     {0,0,1,0,1,2,1,1}
+//   //   },
+//   //   { // conn[1]
+//   //     {1,0,1,1,0,1,1,1},
+//   //     {0,2,0,1,0,1,1,1},
+//   //     {1,0,1,1,1,1,1,1},
+//   //     {1,1,1,1,1,2,0,0},
+//   //     {0,0,1,1,1,1,1,1},
+//   //     {1,1,1,2,1,1,0,0},
+//   //     {1,1,1,0,1,0,0,2},
+//   //     {1,1,1,0,1,0,2,0}
+//   //   },
+//   //   { // conn[2]
+//   //     {0,1,1,1,1,0,1,1},
+//   //     {1,0,0,1,0,1,1,1},
+//   //     {1,0,1,1,1,2,0,1},
+//   //     {1,1,1,0,1,1,1,0},
+//   //     {1,0,1,1,0,1,1,1},
+//   //     {0,1,2,1,1,0,1,0},
+//   //     {1,1,0,1,1,1,0,1},
+//   //     {1,1,1,0,1,0,1,1}
+//   //   },
+//   //   { // conn[3]
+//   //     {0,1,0,1,1,1,1,1},
+//   //     {1,0,1,1,1,1,1,0},
+//   //     {0,1,0,1,2,0,1,0},
+//   //     {1,1,1,0,0,0,1,1},
+//   //     {1,1,2,0,1,0,0,1},
+//   //     {1,1,0,0,0,0,1,1},
+//   //     {1,1,1,1,0,1,0,0},
+//   //     {1,0,0,1,1,1,0,1}
+//   //   },
+//   //   { // conn[4]
+//   //     {0,1,0,1,1,1,0,2},
+//   //     {1,0,1,0,1,1,1,1},
+//   //     {0,1,0,0,2,0,1,1},
+//   //     {1,0,0,0,1,1,2,1},
+//   //     {1,1,2,1,0,0,0,1},
+//   //     {1,1,0,1,0,0,1,1},
+//   //     {0,1,1,2,0,1,0,0},
+//   //     {2,1,1,1,1,1,0,0}
+//   //   },
+//   //   { // conn[5]
+//   //     {0,1,1,1,0,1,0,1},
+//   //     {1,0,1,0,1,1,2,1},
+//   //     {1,1,0,1,0,1,1,1},
+//   //     {1,0,1,0,2,1,0,1},
+//   //     {0,1,0,2,0,0,2,1},
+//   //     {1,1,1,1,0,0,1,1},
+//   //     {0,2,1,0,2,1,0,0},
+//   //     {1,1,1,1,1,1,0,0}
+//   //   }
+//   // };
+
+//   // conn = {
+//   //   { // conn[0]
+//   //     {1,0,0,1,1,0,1,0},
+//   //     {0,1,1,0,0,1,0,1},
+//   //     {1,1,1,0,0,1,0,0},
+//   //     {0,1,1,1,0,0,0,1},
+//   //     {1,0,0,0,2,0,1,0},
+//   //     {0,1,1,0,0,1,1,0},
+//   //     {0,0,0,2,0,1,1,0},
+//   //     {1,0,0,0,1,0,0,2}
+//   //   },
+ 
+//   //   { // conn[2]
+//   //     {1,0,0,1,1,0,1,0},
+//   //     {0,1,1,0,1,1,0,0},
+//   //     {0,0,1,1,0,0,0,2},
+//   //     {1,0,0,0,1,1,1,0},
+//   //     {0,1,0,1,0,1,1,0},
+//   //     {1,0,0,0,1,1,0,1},
+//   //     {1,1,1,0,0,0,0,1},
+//   //     {0,1,1,1,0,0,1,0}
+//   //   },
+    
+//   //   { // conn[4]
+//   //     {0,1,0,1,1,0,1,0},
+//   //     {1,0,1,0,1,0,1,0},
+//   //     {0,0,1,1,0,0,0,2},
+//   //     {1,0,0,0,1,1,1,0},
+//   //     {0,1,0,1,0,1,0,1},
+//   //     {1,0,1,0,1,1,0,0},
+//   //     {1,1,1,0,0,0,0,1},
+//   //     {0,1,0,1,0,1,1,0}
+//   //   },
+    
+//   //   { // conn[6]
+//   //     {0,1,0,0,1,1,0,1},
+//   //     {1,0,0,1,1,0,1,0},
+//   //     {0,1,1,1,0,1,0,0},
+//   //     {1,0,1,0,1,0,0,1},
+//   //     {0,1,1,1,0,0,1,0},
+//   //     {1,0,0,0,0,0,2,1},
+//   //     {0,0,1,0,1,2,0,0},
+//   //     {1,1,0,1,0,0,0,1}
+//   //   },
+    
+//   //   { // conn[8]
+//   //     {0,1,0,0,1,1,1,0},
+//   //     {1,0,0,1,1,0,0,1},
+//   //     {0,1,1,0,0,1,1,0},
+//   //     {0,1,1,0,0,1,1,0},
+//   //     {1,0,1,0,1,0,0,1},
+//   //     {0,0,1,2,0,0,0,1},
+//   //     {2,0,0,1,0,0,0,1},
+//   //     {0,1,0,0,1,1,1,0}
+//   //   },
+    
+//   //   { // conn[10]
+//   //     {0,0,1,0,1,1,0,1},
+//   //     {0,1,0,1,0,0,1,1},
+//   //     {1,0,0,0,1,0,2,0},
+//   //     {1,0,1,0,0,2,0,0},
+//   //     {1,1,1,0,1,0,0,0},
+//   //     {0,1,0,2,0,0,0,1},
+//   //     {1,1,0,1,0,0,0,1},
+//   //     {0,0,1,0,1,1,1,0}
+//   //   },
+    
+//   // };
+// //Deeksha: This is for reverse
+//   // conn = {
+//   //   { // conn[0]
+//   //     {1,1,0,1,0,1,0,0},
+//   //     {0,1,0,0,1,0,1,1},
+//   //     {1,0,1,0,2,0,0,0},
+//   //     {1,0,1,1,0,1,0,0},
+//   //     {0,0,1,1,1,0,0,1},
+//   //     {0,0,1,0,0,1,1,1},
+//   //     {1,1,0,1,0,0,1,0},
+//   //     {0,1,0,0,0,1,1,1}
+//   //   },
+//   //   { // conn[1]
+//   //     {1,0,1,0,0,1,1,0},
+//   //     {0,1,0,0,1,1,0,1},
+//   //     {0,1,1,0,0,0,0,2},
+//   //     {1,1,0,1,1,0,0,0},
+//   //     {0,1,0,1,1,0,1,0},
+//   //     {0,0,2,0,0,1,1,0},
+//   //     {1,0,0,1,1,0,1,0},
+//   //     {1,0,0,1,0,1,0,1}
+//   //   },
+//   //   { // conn[2]
+//   //     {1,0,1,1,0,0,1,0},
+//   //     {0,1,0,1,0,1,0,1},
+//   //     {0,0,1,0,1,1,1,0},
+//   //     {0,1,1,0,1,0,0,1},
+//   //     {1,0,0,1,0,1,0,1},
+//   //     {1,1,0,1,0,0,1,0},
+//   //     {1,0,0,0,2,1,0,0},
+//   //     {0,1,1,0,0,0,1,1}
+//   //   },
+//   //   { // conn[3]
+//   //     {0,0,0,1,1,0,1,1},
+//   //     {1,1,0,1,0,1,0,0},
+//   //     {0,0,0,1,1,1,0,1},
+//   //     {1,0,1,0,0,0,2,0},
+//   //     {0,1,1,0,0,1,0,1},
+//   //     {1,0,1,0,1,0,0,1},
+//   //     {0,1,1,1,0,0,1,0},
+//   //     {1,1,0,0,1,1,0,0}
+//   //   },
+//   //   { // conn[4]
+//   //     {1,0,0,1,1,0,0,1},
+//   //     {0,0,2,1,0,1,0,0},
+//   //     {1,1,0,0,0,1,1,0},
+//   //     {1,0,0,0,1,0,0,2},
+//   //     {0,1,0,1,0,0,2,0},
+//   //     {0,1,1,0,1,0,1,0},
+//   //     {0,1,1,1,0,0,0,1},
+//   //     {1,0,0,0,1,2,0,0}
+//   //   },
+//   //   { // conn[5]
+//   //     {0,1,0,1,1,0,0,1},
+//   //     {1,0,1,0,0,1,1,0},
+//   //     {2,0,0,1,0,1,0,0},
+//   //     {0,0,2,0,0,0,1,1},
+//   //     {1,0,0,0,0,1,1,1},
+//   //     {0,2,0,0,2,0,0,0},
+//   //     {0,1,1,1,0,0,0,1},
+//   //     {0,0,0,1,1,1,1,0}
+//   //   }
+//   // };
+//   // conn = {
+//   //   { // conn[0]
+//   //     {1,0,1,0,1,0,1,0},
+//   //     {0,1,1,0,1,0,1,0},
+//   //     {1,1,1,0,0,1,0,0},
+//   //     {0,1,0,1,1,0,0,1},
+//   //     {0,1,0,0,1,1,1,0},
+//   //     {1,0,0,1,0,1,0,1},
+//   //     {0,0,0,2,0,0,1,1},
+//   //     {1,0,1,0,0,1,0,1}
+//   //   },
+//   //   { // conn[1]
+//   //     {1,0,1,0,0,1,1,0},
+//   //     {0,1,0,1,0,1,0,1},
+//   //     {1,0,1,1,0,0,0,1},
+//   //     {1,1,0,1,0,0,1,0},
+//   //     {0,1,0,0,1,1,1,0},
+//   //     {0,0,1,0,1,1,0,1},
+//   //     {1,0,0,1,1,0,1,0},
+//   //     {0,1,1,0,1,0,0,1}
+//   //   },
+//   //   { // conn[2]
+//   //     {1,0,0,1,0,1,1,0},
+//   //     {0,0,1,1,1,0,0,1},
+//   //     {1,1,1,0,0,0,0,1},
+//   //     {0,0,0,1,0,1,1,1},
+//   //     {1,1,0,0,1,1,0,0},
+//   //     {0,1,0,0,1,1,1,0},
+//   //     {0,1,1,0,1,0,0,1},
+//   //     {1,0,1,1,0,0,1,0}
+//   //   },
+//   //   { // conn[3]
+//   //     {0,1,0,1,0,1,0,1},
+//   //     {2,0,0,1,1,0,0,0},
+//   //     {1,0,1,0,1,0,1,0},
+//   //     {0,0,1,0,1,1,0,1},
+//   //     {1,0,1,1,0,0,0,1},
+//   //     {0,1,0,0,0,1,2,0},
+//   //     {0,1,0,1,0,1,0,1},
+//   //     {0,1,1,0,1,0,1,0}
+//   //   },
+//   //   { // conn[4]
+//   //     {0,1,0,1,0,0,1,1},
+//   //     {2,0,0,1,0,1,0,0},
+//   //     {0,0,1,1,2,0,0,0},
+//   //     {1,0,0,0,1,0,1,1},
+//   //     {1,1,1,0,0,1,0,0},
+//   //     {0,1,0,1,0,0,1,1},
+//   //     {0,0,1,0,0,2,0,1},
+//   //     {0,1,1,0,1,0,1,0}
+//   //   },
+//   //   { // conn[5]
+//   //     {0,0,1,0,1,0,1,1},
+//   //     {0,0,1,0,1,1,1,0},
+//   //     {1,1,0,1,0,1,0,0},
+//   //     {1,1,1,0,1,0,0,0},
+//   //     {0,0,0,0,0,1,2,1},
+//   //     {1,0,1,1,0,0,0,1},
+//   //     {0,2,0,1,0,0,0,1},
+//   //     {1,0,0,1,1,1,0,0}
+//   //   }
+//   // };
+// // conn = {
+// //     { // conn[0]
+// //       {1,1,1,0,0,1,0,0},
+// //       {0,1,1,1,0,0,1,0},
+// //       {1,0,1,0,1,0,1,0},
+// //       {1,0,0,1,1,1,0,0},
+// //       {0,0,0,1,1,0,1,1},
+// //       {0,1,1,0,0,1,0,1},
+// //       {1,1,0,0,0,0,1,1},
+// //       {0,0,0,1,1,1,0,1}
+// //     },
+// //     { // conn[1]
+// //       {0,2,0,1,0,1,0,0},
+// //       {0,0,1,0,1,0,1,1},
+// //       {1,0,1,0,1,0,0,1},
+// //       {0,0,0,1,0,1,1,1},
+// //       {0,1,1,1,1,0,0,0},
+// //       {0,1,0,1,0,1,0,1},
+// //       {1,0,1,0,1,0,1,0},
+// //       {2,0,0,0,0,1,1,0}
+// //     },
+// //     { // conn[2]
+// //       {0,2,0,0,1,0,0,1},
+// //       {0,0,0,1,0,1,1,1},
+// //       {1,0,1,0,1,0,0,1},
+// //       {2,0,0,1,0,1,0,0},
+// //       {0,1,1,1,1,0,0,0},
+// //       {0,0,1,1,0,0,1,1},
+// //       {0,1,1,0,1,1,0,0},
+// //       {1,0,0,0,0,1,2,0}
+// //     },
+// //     { // conn[3]
+// //       {0,0,1,0,1,1,0,1},
+// //       {1,0,0,1,0,1,1,0},
+// //       {0,1,1,0,1,0,1,0},
+// //       {1,1,0,1,0,0,0,1},
+// //       {0,0,0,0,0,2,1,1},
+// //       {0,1,1,0,1,0,0,1},
+// //       {1,0,1,1,0,0,1,0},
+// //       {1,1,0,1,1,0,0,0}
+// //     },
+// //     { // conn[4]
+// //       {0,0,1,0,1,0,1,1},
+// //       {1,0,0,1,1,1,0,0},
+// //       {0,1,0,1,0,1,1,0},
+// //       {1,1,1,0,0,0,0,1},
+// //       {1,0,0,0,0,2,0,1},
+// //       {1,0,1,1,0,0,1,0},
+// //       {0,1,0,1,1,0,0,1},
+// //       {0,1,1,0,1,0,1,0}
+// //     },
+// //     { // conn[5]
+// //       {0,0,1,0,0,1,1,1},
+// //       {1,0,0,1,2,0,0,0},
+// //       {0,0,0,1,0,1,1,1},
+// //       {0,0,0,0,1,1,1,1},
+// //       {2,1,1,0,0,0,0,0},
+// //       {1,0,1,1,0,0,1,0},
+// //       {0,2,0,0,0,1,0,1},
+// //       {0,1,1,1,1,0,0,0}
+// //     }
+// //   };
+//   //std::vector<int> avail_conn(region_size, alpha);
+//   for (int k = 0; k < conn.size(); k++)  //Deeksha :CHeck this later
+//   {
+//     // for(int i = 0; i < region_size; i++) {
+//     //   for(int j = 0; j < region_size; j++) {
+//     //     // Initialize connection matrix
+//     //       conn[k][j][i] = conn[k][i][j];       
+//     //   }
+//     // }
+        
+//     conn_cycle.push_back(conn[k]);
+//     conn_cycle_intervals.push_back(periodic_interval);
+//   }
   
-  conn_cycle_ready = !conn_cycle.empty();
-  conn_cycle_idx = 0;
-  std::cout << "Conn cycle initialized with " << conn_cycle.size() << " connection matrices." << " reverse: " << reverse << " layer "<< current_layer_id << "region " << region_id << " time " << eventlist.now() << std::endl;
+//   conn_cycle_ready = !conn_cycle.empty();
+//   conn_cycle_idx = 0;
+//   active_conn_cycle_interval = periodic_interval;
+//   std::cout << "Conn cycle initialized with " << conn_cycle.size() << " connection matrices." << " reverse: " << reverse << " layer "<< current_layer_id << "region " << region_id << " time " << eventlist.now() << std::endl;
 }
 
 //Deeksha: Adding the function here to find if there is any active all-to-all flow in the region, to decide whether we can skip the reconfiguration or not
@@ -1417,10 +2290,36 @@ void RegionalTopoManager::rotor_conn_cycle()
   }
 
   conn_cycle.clear();
-  std::vector<std::vector<int>> conn(region_size, std::vector<int>(region_size, 0));
-  std::vector<int> avail_conn(region_size, alpha);
-  for (int k = 1; k < region_size; k++)
+  conn_cycle_intervals.clear();
+  const int N = region_size;
+  assert(alpha > 0);
+  assert(N > 0);
+  assert(N % alpha == 0);
+
+  const int cycle_size = N / alpha;
+  std::vector<std::vector<int>> coverage(
+      N, std::vector<int>(N, 0));
+
+  // std::vector<int> avail_conn(region_size, alpha);
+  for (int slot = 0; slot < cycle_size; slot++)
   {
+    std::vector<std::vector<int>> conn(
+        N, std::vector<int>(N, 0));
+
+    // Build one alpha-regular bipartite matching union using alpha cyclic shifts.
+    // Across all slots, the shifts cover 0..N-1 exactly once, so the sum of the
+    // conn matrices is the all-ones matrix.
+    for (int offset_in_slot = 0; offset_in_slot < alpha; offset_in_slot++)
+    {
+      const int shift = slot * alpha + offset_in_slot;
+      for (int i = 0; i < N; i++)
+      {
+        const int j = (i + shift) % N;
+        conn[i][j] = 1;
+        coverage[i][j]++;
+      }
+    }
+
     // for (int i = 0; i < region_size; i++) {
     //   for (int j = 0; j < region_size; j++) {
     //     if (i == j) {
@@ -1434,16 +2333,59 @@ void RegionalTopoManager::rotor_conn_cycle()
     //   }
     // }
     conn_cycle.push_back(conn);
+    conn_cycle_intervals.push_back(periodic_interval);
+  }
+
+  for (int slot = 0; slot < cycle_size; slot++)
+  {
+    for (int i = 0; i < N; i++)
+    {
+      int row_sum = 0;
+      int col_sum = 0;
+      for (int j = 0; j < N; j++)
+      {
+        row_sum += conn_cycle[slot][i][j];
+        col_sum += conn_cycle[slot][j][i];
+      }
+      assert(row_sum == alpha);
+      assert(col_sum == alpha);
+    }
+  }
+
+  for (int i = 0; i < N; i++)
+  {
+    for (int j = 0; j < N; j++)
+    {
+      assert(coverage[i][j] == 1);
+    }
   }
   
   conn_cycle_ready = !conn_cycle.empty();
   conn_cycle_idx = 0;
+  active_conn_cycle_interval = periodic_interval;
+  std::cout << "Rotor conn cycle initialized with "
+            << conn_cycle.size()
+            << " connection matrices."
+            << " cycle_size " << cycle_size
+            << " alpha " << alpha
+            << " reverse: " << reverse
+            << " layer " << current_layer_id
+            << " region " << region_id
+            << " time " << eventlist.now() << std::endl;
 }
 
 
 std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
 
   std::vector<std::vector<int>> conn(region_size, std::vector<int>(region_size, 0));
+  if (conn_cycle_idx < conn_cycle_intervals.size())
+  {
+    active_conn_cycle_interval = conn_cycle_intervals[conn_cycle_idx];
+  }
+  else
+  {
+    active_conn_cycle_interval = periodic_interval;
+  }
   conn = conn_cycle[conn_cycle_idx];         // Updating the regional conn matrix from the conn cycle
   conn_cycle_idx++;
   conn_cycle_idx = (conn_cycle_idx) % conn_cycle.size(); // Deeksha: Rotate to next conn matrix
@@ -1489,6 +2431,14 @@ std::vector<std::vector<int>> RegionalTopoManager::regional_topo_reconfig() {
 std::vector<std::vector<int>> RegionalTopoManager::rotor_reconfig() {
 
   std::vector<std::vector<int>> conn(region_size, std::vector<int>(region_size, 0));
+  if (conn_cycle_idx < conn_cycle_intervals.size())
+  {
+    active_conn_cycle_interval = conn_cycle_intervals[conn_cycle_idx];
+  }
+  else
+  {
+    active_conn_cycle_interval = periodic_interval;
+  }
   conn = conn_cycle[conn_cycle_idx];         // Updating the regional conn matrix from the conn cycle
   conn_cycle_idx = (conn_cycle_idx + 1) % conn_cycle.size(); // Deeksha: Rotate to next conn matrix
   
@@ -1518,8 +2468,8 @@ std::vector<std::vector<int>> RegionalTopoManager::rotor_reconfig() {
   return conn;
 }
 
-MixnetTopoManager::MixnetTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, bool periodic_reconf, simtime_picosec periodic_interval)
-    : topo(topo), demandrecorder(demandrecorder), reconf_delay(refonc_delay), periodic_reconf(periodic_reconf), periodic_interval(periodic_interval)
+MixnetTopoManager::MixnetTopoManager(Mixnet *topo, All2AllTrafficRecorder *demandrecorder, simtime_picosec refonc_delay, EventList &eventlist, bool periodic_reconf, simtime_picosec periodic_interval, MixnetConnCycleAlgorithm conn_cycle_algorithm)
+    : topo(topo), demandrecorder(demandrecorder), reconf_delay(refonc_delay), periodic_reconf(periodic_reconf), periodic_interval(periodic_interval), conn_cycle_algorithm(conn_cycle_algorithm)
 {
 
   region_num = topo->region_num;
@@ -1530,6 +2480,6 @@ MixnetTopoManager::MixnetTopoManager(Mixnet *topo, All2AllTrafficRecorder *deman
   // init the regional topo managers
   for (int i = 0; i < region_num; i++)
   {
-    regional_topo_managers.push_back(new RegionalTopoManager(topo, demandrecorder, reconf_delay, eventlist, i, periodic_reconf, periodic_interval));
+    regional_topo_managers.push_back(new RegionalTopoManager(topo, demandrecorder, reconf_delay, eventlist, i, periodic_reconf, periodic_interval, conn_cycle_algorithm));
   }
 }
