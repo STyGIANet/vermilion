@@ -78,7 +78,7 @@ summarize_rdelay() {
 }
 
 
-for algorithm in "vermilion" "mixnet"; do
+for algorithm in "vermilion"; do
 
     if [[ $algorithm == "vermilion" ]]; then
         ALG_DIR="$REPO_DIR/src/clos/datacenter"

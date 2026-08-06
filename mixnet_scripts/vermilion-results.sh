@@ -3,7 +3,7 @@
 declare -a bw=(800 1600 2400 3200 4800 6400 8000 9600)
 declare -a microbatchsize=(8)
 declare -a rdelay=(10 100 500 1000 10000 100000 1000000 10000000)
-declare -a workloads=("num_global_tokens_per_expert" "mixtral" "deepseek" "mixtral_2" "Phi-3.5-MoE-instruct-gsm8k" "Phi-3.5-MoE-instruct-mmlu" "qwen" "qwen_128")
+declare -a workloads=("mixtral_2")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname $SCRIPT_DIR)"
@@ -18,7 +18,7 @@ N=0
 ELEC_BW=400
 
 NCORE=100
-echo "algorithm bw rdelay workload time"
+echo "algorithm bw rdelay workload time" > "results.txt"
 for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
     for mb in "${microbatchsize[@]}"; do
         for b in "${bw[@]}"; do
@@ -29,7 +29,7 @@ for algorithm in "birkhoff" "vermilion" "rotor" "mixnet";do
                     # time in milliseconds
                     # Note: 0 is an error, not magically fast
                     COMPLETION_TIME=$(awk '/duration/ {sum += $NF; n++} END {if (n>0) printf "%.4f\n", sum/n/1e9; else printf "0"}' "$DUMP_DIR/output_err.txt")
-                    echo "$algorithm $b $r $workload $COMPLETION_TIME"
+                    echo "$algorithm $b $r $workload $COMPLETION_TIME" >> "results.txt"
                     N=$(( $N+1 ))
                 done
             done

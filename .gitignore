@@ -26,6 +26,7 @@ topo_gen/
 mixnet_scripts/collect_results.sh
 mixnet_scripts/run_experiments.sh
 mixnet_scripts/inspect_run.sh
+mixnet_scripts/
 # mixnet_scripts/vermilion-rdelay.sh
 # mixnet_scripts/vermilion-rdealy-interval.sh
 # mixnet_scripts/vermilion-interval.sh

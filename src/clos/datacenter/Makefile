@@ -22,7 +22,7 @@ endif
 #-Lksp
 OBJS=../eventlist.o ../tcppacket.o ../pipe.o ../queue.o ../queue_lossless.o ../queue_lossless_input.o ../queue_lossless_output.o ../ecnqueue.o ../tcp.o ../dctcp.o ../mtcp.o ../loggers.o ../logfile.o ../clock.o ../config.o ../network.o ../qcn.o ../exoqueue.o ../randomqueue.o ../cbr.o ../cbrpacket.o ../sent_packets.o ../ndp.o ../ndppacket.o ../eth_pause_packet.o ../compositequeue.o ../prioqueue.o ../cpqueue.o ../compositeprioqueue.o ../switch.o ../fairpullqueue.o ../route.o ../ffapp.o ../dyn_net_sch.o #../mixnet_topomanager.o#../taskgraph.pb.o
 
-all: htsim_tcp_fc htsim_tcp_fattree htsim_tcp_os_fattree htsim_tcp_flat htsim_tcp_aggosft htsim_tcp_dyn_flat htsim_tcp_fattree_multijob htsim_tcp_aggos_fattree_multijob htsim_tcp_mixnet
+all: htsim_tcp_fc htsim_tcp_fattree htsim_tcp_os_fattree htsim_tcp_flat htsim_tcp_aggosft htsim_tcp_dyn_flat htsim_tcp_fattree_multijob htsim_tcp_aggos_fattree_multijob htsim_tcp_mixnet #htsim_tcp_vermilion
 
 htsim_tcp_fattree_multijob: main_tcp_multijob_fattree.o firstfit.o fat_tree_topology.o
 	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_multijob_fattree.o fat_tree_topology.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_fattree_multijob
@@ -36,6 +36,9 @@ htsim_tcp_dyn_flat: main_tcp_dyn_flat.o firstfit.o flat_topology.o
 
 htsim_tcp_mixnet: main_tcp_mixnet.o firstfit.o fat_tree_topology.o mixnet.o
 	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_mixnet.o fat_tree_topology.o mixnet.o ../mixnet_topomanager.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_mixnet
+
+# htsim_tcp_vermilion: main_tcp_vermilion.o firstfit.o fat_tree_topology.o vermilion.o
+# 	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_vermilion.o fat_tree_topology.o vermilion.o ../vermilion_topomanager.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_vermilion
 
 htsim_tcp_fc: main_tcp_fc.o firstfit.o  fc_topology.o
 	$(CC) $(CFLAGS) $(INCLUDE) firstfit.o main_tcp_fc.o fc_topology.o $(OBJS) $(LIB) -lhtsim -o htsim_tcp_fc
@@ -60,6 +63,10 @@ main_tcp_dyn_flat.o: main_tcp_dyn_flat.cpp
 main_tcp_mixnet.o: main_tcp_mixnet.cpp
 	@echo "Compiling main_tcp_mixnet.cpp"
 	$(CC) $(INCLUDE) $(CFLAGS) -c  main_tcp_mixnet.cpp
+
+# main_tcp_vermilion.o: main_tcp_vermilion.cpp
+# 	@echo "Compiling main_tcp_vermilion.cpp"
+# 	$(CC) $(INCLUDE) $(CFLAGS) -c  main_tcp_vermilion.cpp
 	
 main_tcp_fc.o: main_tcp_fc.cpp 
 	$(CC) $(INCLUDE) $(CFLAGS) -c  main_tcp_fc.cpp
@@ -107,6 +114,10 @@ agg_os_fattree.o: agg_os_fattree.cpp agg_os_fattree.h topology.h
 mixnet.o: mixnet.cpp mixnet.h topology.h fat_tree_topology.cpp fat_tree_topology.h topology.h
 	@echo "mixnet"
 	$(CC) $(INCLUDE) $(CFLAGS) -c mixnet.cpp
+
+# vermilion.o: vermilion.cpp vermilion.h topology.h fat_tree_topology.cpp fat_tree_topology.h topology.h
+# 	@echo "vermilion"
+# 	$(CC) $(INCLUDE) $(CFLAGS) -c vermilion.cpp
 
 clean:	
 	rm -f *.o htsim_ndp* htsim_tcp* htsim_dctcp*

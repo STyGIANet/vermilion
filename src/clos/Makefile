@@ -1,6 +1,6 @@
-OBJS=eventlist.o tcppacket.o pipe.o queue.o queue_lossless.o queue_lossless_input.o queue_lossless_output.o ecnqueue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o qcn.o exoqueue.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o eth_pause_packet.o compositequeue.o prioqueue.o cpqueue.o compositeprioqueue.o switch.o fairpullqueue.o route.o ffapp.o dyn_net_sch.o mixnet_topomanager.o # datacenter/mixnet.o stays out of libhtsim.a; mixnet mains link it separately
+OBJS=eventlist.o tcppacket.o pipe.o queue.o queue_lossless.o queue_lossless_input.o queue_lossless_output.o ecnqueue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o qcn.o exoqueue.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o eth_pause_packet.o compositequeue.o prioqueue.o cpqueue.o compositeprioqueue.o switch.o fairpullqueue.o route.o ffapp.o dyn_net_sch.o mixnet_topomanager.o #vermilion_topomanager.o # datacenter/mixnet.o stays out of libhtsim.a; mixnet mains link it separately
 
-HDRS=network.h ndp.h queue_lossless.h queue_lossless_input.h queue_lossless_output.h compositequeue.h prioqueue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h tcp.h dctcp.h mtcp.h sent_packets.h tcppacket.h ndppacket.h eth_pause_packet.h compositeprioqueue.h ecnqueue.h switch.h ffapp.h taskgraph_generated.h dyn_net_sch.h mixnet_topomanager.h #taskgraph.pb.h
+HDRS=network.h ndp.h queue_lossless.h queue_lossless_input.h queue_lossless_output.h compositequeue.h prioqueue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h tcp.h dctcp.h mtcp.h sent_packets.h tcppacket.h ndppacket.h eth_pause_packet.h compositeprioqueue.h ecnqueue.h switch.h ffapp.h taskgraph_generated.h dyn_net_sch.h mixnet_topomanager.h #vermilion_topomanager.h #taskgraph.pb.h
 #USE_GUROBI = 1
 FF_HOME?=$(PWD)/../../../FlexFlow
 #GUROBI_DIR?=$(HOME)/gurobi912/linux64
@@ -71,6 +71,8 @@ taskgraph.pb.o: taskgraph.pb.cc taskgraph.pb.h $(HDRS)
 dyn_net_sch.o: dyn_net_sch.cpp $(HDRS)
 mixnet_topomanager.o: mixnet_topomanager.cpp $(HDRS)
 datacenter/mixnet.o: datacenter/mixnet.cpp datacenter/mixnet.h $(HDRS)
+# vermilion_topomanager.o: vermilion_topomanager.cpp $(HDRS)
+# datacenter/vermilion.o: datacenter/vermilion.cpp datacenter/vermilion.h $(HDRS)
 	$(CC) $(CFLAGS) -Wuninitialized -c -o $@ $<
 
 .cpp.o:

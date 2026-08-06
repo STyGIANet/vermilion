@@ -6,8 +6,8 @@ declare -a rdelay=(10 100 500 1000 10000 100000 1000000 10000000)
 # declare -a workloads=("num_global_tokens_per_expert" "mixtral" "deepseek" "mixtral_2" "Phi-3.5-MoE-instruct-gsm8k" "Phi-3.5-MoE-instruct-mmlu" "qwen" "qwen_128")
 declare -a workloads=("mixtral_2")
 
-# ALGS=("birkhoff" "vermilion" "rotor" "mixnet")
-ALGS=("birkhoff")
+ALGS=("birkhoff" "vermilion" "rotor" "mixnet")
+#ALGS=("birkhoff")
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname $SCRIPT_DIR)"

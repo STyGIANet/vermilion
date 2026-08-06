@@ -13,6 +13,22 @@ new_fbuf_dir="$REPO_DIR/mixnet_flatbuf"
 DEBUG=5
 COMPILE=0
 
+ARG="$1"
+ALGORITHMS=("vermilion" "mixnet" "birkoff" "rotor")
+
+declare -a algorithms_to_run
+
+if [[ "$ARG" == "all" ]]; then
+    algorithms_to_run=("${ALGORITHMS[@]}")
+else 
+    match=0
+    for a in "${ALGORITHMS[@]}"; do
+        [[ "$a" == "$ARG" ]] && { match=1; break; }
+    done
+    if [[ $match -eq 1 ]]; then
+        algorithms_to_run=("$ARG")
+    fi
+fi
 
 analyze_timings() {
     local FOLDER="${1:-.}"
@@ -79,7 +95,7 @@ summarize_rdelay() {
 
 
 
-for algorithm in "vermilion" "mixnet" ; do
+for algorithm in "${algorithms_to_run[@]}"; do
 
     if [[ $algorithm == "vermilion" ]]; then
         ALG_DIR="$REPO_DIR/src/clos/datacenter"
@@ -109,13 +125,13 @@ for algorithm in "vermilion" "mixnet" ; do
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
 
-                    # if [[ $algorithm == "vermilion" ]]; then
-                    #     echo "Running Vermilion with periodic reconf interval $periodic_interval ns and rdelay $r ns"
-                    #     ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_ns $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt
-                    # elif [[ $algorithm == "mixnet" ]]; then
-                    #     echo "Running MixNet with rdelay $r ns"
-                    #     ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
-                    #  fi
+                    if [[ $algorithm == "vermilion" ]]; then
+                        echo "Running Vermilion with periodic reconf interval $periodic_interval ns and rdelay $r ns"
+                        ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -periodic_reconf 1 -periodic_interval_ns $periodic_interval  -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt
+                    elif [[ $algorithm == "mixnet" ]]; then
+                        echo "Running MixNet with rdelay $r ns"
+                        ./htsim_tcp_mixnet -debug $DEBUG -simtime 360000.1 -flowfile ${new_fbuf_dir}/mixtral8x22B_dp2_tp8_pp8_ep8_${mb}.fbuf -speed $((b*1000)) -alpha 4 -ocs_file nwsim_ocs_${b}.txt -ecs_file nwsim_ecs_${b}.txt  -nodes 1024 -ssthresh 10000 -rtt 1 -q 100000000000 -dp_degree 2 -tp_degree 8 -pp_degree 8 -ep_degree 8 -rdelay $r -weightmatrix $REPO_DIR/test/${workload}.txt -logdir $DUMP_DIR > $DUMP_DIR/output.txt 2> $DUMP_DIR/output_err.txt 
+                     fi
                     # Run timing analysis and save results to $DUMP_DIR
                     analyze_timings "$DUMP_DIR"
 
