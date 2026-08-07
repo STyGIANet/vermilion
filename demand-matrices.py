@@ -12,8 +12,10 @@ import numpy as np
 import matplotlib
 import seaborn as sns
 from matplotlib.colors import LogNorm
+from pathlib import Path
 #%%
-directory = "/home/vamsi/src/phd/writings/rdcn-throughput/master/plots/"
+directory = "matrices/"
+Path(directory).mkdir(parents=True, exist_ok=True)
 
 heatmaps=["vision.png","image-processing.png","object-tracking.png","speech-recognition.png"]
 
@@ -179,13 +181,12 @@ import seaborn as sns
 from matplotlib.colors import LogNorm
 import matplotlib.colors as colors
 
-directory = "/home/vamsi/src/phd/writings/rdcn-throughput/master/plots/"
+directory = "matrices/"
 
 matplotlib.rcParams.update({'font.size': 28})
 
-heatmaps=["data-parallelism","hybrid-parallelism","heatmap1","heatmap2","heatmap3","topoopt"]
-# heatmaps=["data-parallelism","hybrid-parallelism","heatmap2","heatmap3"]
-# heatmaps=["hybrid-parallelism"]
+# heatmaps=["data-parallelism","hybrid-parallelism","heatmap1","heatmap2","heatmap3","topoopt"]
+heatmaps=["data-parallelism"]
 # Function to convert RGB to hexadecimal
 def rgb_to_hex(rgb):
     return '{:02x}{:02x}{:02x}'.format(int(rgb[0]), int(rgb[1]), int(rgb[2]))

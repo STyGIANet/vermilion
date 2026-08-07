@@ -320,3 +320,24 @@ Behavior by state
 
 Notes 
 - Use the log files under `vermilion/scr/clos/datacentre/logs/` to trace event timings and state transitions.
+
+
+## Generating an example heatmap
+
+Figure 4 in the paper shows an example with heatmap representation using DLRM data parallel traffic matrix. This example can be reproduced as follows: 
+
+```bash
+cd throughput-analysis
+python3 example-vermilion.py
+```
+The following plots will be generated in `plots/` directory
+
+- dlrm-original.pdf (Figure 4a)
+- dlrm-normalized.pdf  (Figure 4d)
+- dlrm-upscaled.pdf (Figure 4e)
+- dlrm-rounded.pdf (Figure 4f)
+- dlrm-completeaug.pdf (Figure 4g)
+- configuration-model-graph.pdf 
+- dlrm-configurationaug.pdf (Figure 4h)
+- dlrm-emulated.pdf (Figure 4c)
+- dlrm-emulated-oblivious.pdf (Figure 4b)
