@@ -365,4 +365,4 @@ The following plots will be generated in `plots/` directory
 
 ## Opera paths
 
-Figure 6b can be generated using `python plot-opera-paths.py`, where the input file has been generated using [opera-sim](https://github.com/TritonNetworking/opera-sim).
+Figure 6b can be generated using `python plot-opera-paths.py`, where the input file `opera-paths.csv` has been generated using [opera-sim](https://github.com/TritonNetworking/opera-sim). This generated the plot `opera-paths.pdf` in the `plots/` directory.

@@ -27,7 +27,7 @@ plt.rcParams.update({'font.size': 14})
 
 ####### Paths
 
-df = pd.read_csv(directory+"opera-paths-64-16.csv",header=None,usecols=[0],names=["pathlen"])
+df = pd.read_csv(directory+"opera-paths.csv",header=None,usecols=[0],names=["pathlen"])
 
 pathlenopera=list(df["pathlen"])
 
