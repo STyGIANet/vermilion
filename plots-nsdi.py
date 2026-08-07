@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 
-plotsdir = "/home/vamsi/src/phd/writings/rdcn-throughput/nsdi2025/plots/"
-directory="/home/vamsi/src/phd/codebase/rdcn-throughput/"
+plotsdir = "plots/"
+directory="./"
 
 #%%
 
@@ -24,7 +24,7 @@ hatches = ['/', '\\', '-', 'x', '+', '|', 'o', 'O', '.', '*']
 
 plt.rcParams.update({'font.size': 14})
 # Load the updated dataset
-df = pd.read_csv(directory+'Goran_Bachelor_Code/nsdi-throughput-results.txt',delimiter=" ")
+df = pd.read_csv(directory+'throughput-analysis/nsdi2027-throughput-results.csv',delimiter=" ")
 
 # Filter data for N=16
 df_n16 = df[df['n'] == 16]
@@ -110,7 +110,7 @@ hatches = ['/', '\\', '-', 'x', '+', '|', 'o', 'O', '.', '*']
 
 plt.rcParams.update({'font.size': 14})
 # Load the updated dataset
-df = pd.read_csv(directory+'Goran_Bachelor_Code/nsdi-throughput-results.txt',delimiter=" ")
+df = pd.read_csv(directory+'throughput-analysis/nsdi2027-throughput-results.csv',delimiter=" ")
 
 # Filter data for N=16
 df_n16 = df[df['n'] == 32]
@@ -188,7 +188,7 @@ hatches = ['/', '\\', '-', 'x', '+', '|', 'o', 'O', '.', '*']
 
 plt.rcParams.update({'font.size': 14})
 # Load the updated dataset
-df = pd.read_csv(directory+'Goran_Bachelor_Code/nsdi-throughput-results.txt',delimiter=" ")
+df = pd.read_csv(directory+'throughput-analysis/nsdi2027-throughput-results.csv',delimiter=" ")
 
 # Filter data for N=16
 df_n16 = df[df['n'] == 48]
@@ -265,7 +265,7 @@ fig.savefig(plotsdir+"throughput-48.pdf")
 
 plt.rcParams.update({'font.size': 18})
 
-df = pd.read_csv(directory+'Goran_Bachelor_Code/nsdi-throughput-results.txt',delimiter=" ")
+df = pd.read_csv(directory+'throughput-analysis/nsdi2027-throughput-results.csv',delimiter=" ")
 
 N=32
 df = df[(df["n"]==N)&(df["alg"]=="vermilion")]
@@ -300,7 +300,7 @@ fig.savefig(plotsdir+"throughput-k.pdf")
 
 plt.rcParams.update({'font.size': 18})
 
-df = pd.read_csv(directory+'Goran_Bachelor_Code/nsdi-throughput-results.txt',delimiter=" ")
+df = pd.read_csv(directory+'throughput-analysis/nsdi2027-throughput-results.csv',delimiter=" ")
 
 df = df[df["alg"]=="vermilion"]
 

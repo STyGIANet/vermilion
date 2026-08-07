@@ -341,3 +341,23 @@ The following plots will be generated in `plots/` directory
 - dlrm-configurationaug.pdf (Figure 4h)
 - dlrm-emulated.pdf (Figure 4c)
 - dlrm-emulated-oblivious.pdf (Figure 4b)
+
+
+## Throughput Comparison
+
+Figure 7 in the paper compares the throughput of different approaches across various traffic matrices. This can be reproduced as follows:
+
+```bash
+cd throughput-analysis
+python3 paperCode.py > nsdi2027-throughput-results.txt
+cat nsdi2027-throughput-results.txt | grep mygrep > nsdi2027-throughput-results.csv
+python3 throughput-plots.py
+```
+
+The following plots will be generated in `plots/` directory
+
+- throughput-16.pdf (Figure 7)
+- throughput-32.pdf 
+- throughput-48.pdf (Figure 11)
+- throughput-k.pdf (Figure 8a)
+- throughput-nodes.pdf (Figure 8b)
