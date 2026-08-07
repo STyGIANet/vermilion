@@ -1,32 +1,3 @@
-<!-- ## Build and run
-
-Prerequisites
-- Place the `mixnet_flatbuf` file in the project root (the main folder).
-
-Build
-- Run the build script (it performs a simple clean + build):
-```bash
-./build_vermilion_sim
-```
-
-Run
-- Change into the scripts folder and run the simulation binary:
-```bash
-cd vermilion/mixnet_scripts/
-./mixtral_8x22B_mixnet
-```
-- The binary accepts flags to control:
-    - reconfiguration delay (-periodic_interval_us 20)
-    - periodic reconfiguration flag (-periodic_reconf 1 )
-    - timing workload (choose from the options in the  `mixnet_flatbuf` directory) (workloads=("num_global_tokens_per_expert"))
-
-Outputs
-- Simulation logs are written to:
-```
-vermilion/scr/clos/datacentre/logs/<flatbuf_filename>
-```
-(Replace `<flatbuf_filename>` with the flatbuf file used at runtime.) -->
-
 # Vermilion
 
 This repository contains the code and scripts required to reproduce the simulation results presented in the **Vermilion** paper.

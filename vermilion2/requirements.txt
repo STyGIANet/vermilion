@@ -1,0 +1,6 @@
+gurobipy==12.0.1
+matplotlib==3.10.1
+networkx==3.3
+numpy==2.2.5
+pandas==2.2.3
+seaborn==0.13.2
