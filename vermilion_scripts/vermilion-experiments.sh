@@ -4,7 +4,7 @@ declare -a bw=(800 1600 2400 3200 4800 6400 8000 9600)
 declare -a microbatchsize=(8)
 declare -a rdelay=(10 100 500 1000 10000 100000 1000000 10000000)
 # declare -a workloads=("num_global_tokens_per_expert" "mixtral" "deepseek" "mixtral_2" "Phi-3.5-MoE-instruct-gsm8k" "Phi-3.5-MoE-instruct-mmlu" "qwen" "qwen_128")
-declare -a workloads=("mixtral_2")
+declare -a workloads=("deepseek")
 
 ALGS=("birkhoff" "vermilion" "rotor" "mixnet")
 #ALGS=("birkhoff")
