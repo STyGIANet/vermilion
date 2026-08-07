@@ -343,7 +343,7 @@ The following plots will be generated in `plots/` directory
 - dlrm-emulated-oblivious.pdf (Figure 4b)
 
 
-## Throughput Comparison
+## Throughput comparison
 
 Figure 7 in the paper compares the throughput of different approaches across various traffic matrices. This can be reproduced as follows:
 
