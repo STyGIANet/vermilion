@@ -361,3 +361,8 @@ The following plots will be generated in `plots/` directory
 - throughput-48.pdf (Figure 11)
 - throughput-k.pdf (Figure 8a)
 - throughput-nodes.pdf (Figure 8b)
+
+
+## Opera paths
+
+Figure 6b can be generated using `python plot-opera-paths.py`, where the input file has been generated using [opera-sim](https://github.com/TritonNetworking/opera-sim).
