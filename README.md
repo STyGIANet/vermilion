@@ -1,6 +1,6 @@
 # Vermilion
 
-This repository contains the code and scripts required to reproduce the simulation results presented in the **Vermilion** paper.
+This repository contains the code and scripts required to reproduce the simulation results presented in the paper: [Vermilion: A Traffic-Aware Reconfigurable Optical Interconnect with Formal Throughput Guarantees](https://www.usenix.org/conference/nsdi27/presentation/addanki), USENIX NSDI 2027.
 
 The repository includes:
 
