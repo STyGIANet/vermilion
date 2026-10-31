@@ -43,7 +43,6 @@ else
 fi
 VERMILION_COMPILE=0
 for algorithm in ${ALGS[@]};do
-   
     
     if [[  $algorithm == "vermilion" || $algorithm == "rotor" || $algorithm == "birkhoff" ]];then
         ALG_DIR="$REPO_DIR/src/clos/datacenter"
@@ -56,7 +55,12 @@ for algorithm in ${ALGS[@]};do
         fi
     elif [[ $algorithm == "mixnet" ]];then
         ALG_DIR="$REPO_DIR/mixnet-htsim/src/clos/datacenter"
-         if [[ $COMPILE -eq 1 ]]; then
+        if [ ! -d "$ALG_DIR" ]; then
+            echo "Missing directory: $ALG_DIR"
+            echo "Please check git submodule initialization and update."
+            exit 1
+        fi
+        if [[ $COMPILE -eq 1 ]]; then
             echo "##### Compiling $algorithm ######"
             cd $REPO_DIR/mixnet-htsim/mixnet_scripts/
             ./compile.sh > $LOG_DIR/mixnet_compile_output.txt 2> $LOG_DIR/mixnet_compile_error.txt
@@ -75,6 +79,11 @@ for algorithm in ${ALGS[@]};do
                     # periodic_interval=$(python3 -c "print(max([45000]))")
                     mkdir -p $DUMP_DIR
                     cd "$ALG_DIR"
+                    if [ ! -d "$ALG_DIR" ]; then
+                        echo "Missing directory: $ALG_DIR"
+                        echo "Please check git submodule initialization and update."
+                        exit 1
+                    fi
 
                     while [[ $(ps aux | grep "htsim_tcp_mixnet" | wc -l) -gt $NCORE ]];do
                         echo "Waiting for cpu cores.... $N-th experiment "

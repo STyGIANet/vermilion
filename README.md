@@ -152,7 +152,7 @@ logs/test/
 Experiment scripts are located in:
 
 ```bash
-cd vermilion-scripts
+cd vermilion_scripts
 ```
 
 Before generating plots, create the plot directory if it does not already exist:
@@ -362,6 +362,7 @@ The following plots will be generated in `plots/` directory
 - throughput-k.pdf (Figure 8a)
 - throughput-nodes.pdf (Figure 8b)
 
+**Note:** The scripts require a guroboi license file. An academic license can be obtained for free at [https://portal.gurobi.com](https://portal.gurobi.com/). A short description on getting started with Gurobi and obtaining a license can be found here: [slides](/courses/slides/gurobi-getting-started.pdf).
 
 ## Opera paths
 
