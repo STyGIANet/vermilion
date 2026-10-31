@@ -35,7 +35,7 @@ pip install pandas seaborn matplotlib
 Clone the repository along with its submodules:
 
 ```bash
-git clone --recurse-submodules git@github.com:STyGIANet/vermilion.git
+git clone --recurse-submodules https://github.com/STyGIANet/vermilion.git
 cd vermilion
 ```
 
